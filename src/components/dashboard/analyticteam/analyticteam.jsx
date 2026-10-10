@@ -6,7 +6,7 @@ export default function analyticteam() {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      text: '¡Hola! Soy tu agente conversacional financiero de HextaStudio. ¿Qué dataset, transacción o métrica deseas consultar hoy?',
+      text: 'Hola, soy tu agente conversacional financiero del equipo 6. ¿Qué dataset, transacción o métrica deseas consultar hoy?',
     },
   ])
   const [searchQuery, setSearchQuery] = useState('')
@@ -74,13 +74,7 @@ export default function analyticteam() {
           {/* Logo */}
           <div className="flex items-center gap-3 mb-10">
             <div className="w-9 h-9  bg-orange-600 flex items-center justify-center shadow-md shadow-orange-500/20">
-              <svg
-                className="w-5 h-5 text-white"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path d="M12 0l2.2 7.8L22 4l-4.8 7.2L24 12l-6.8 0.8L22 20l-7.8-3.8L12 24l-2.2-7.8L2 20l4.8-7.2L0 12l6.8-0.8L2 4l7.8 3.8z" />
-              </svg>
+              <p>logo</p>
             </div>
             <div>
               <h1 className="font-bold tracking-tight text-sm text-gray-900">
@@ -183,7 +177,7 @@ export default function analyticteam() {
                 </div>
               </div>
 
-              {/* Grid of Datasets */}
+              {/* grilla de datasets  */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 overflow-y-auto pb-4">
                 {datasets
                   .filter((d) =>
@@ -221,7 +215,7 @@ export default function analyticteam() {
             </div>
           )}
 
-          {/* VISTA 3: AGENTE CONVERSACIONAL (Interactive Chat) */}
+          {/* vista del agente */}
           {activeTab === 'agente' && (
             <div className="w-full h-full flex flex-col bg-white border border-gray-200 overflow-hidden shadow-sm">
               {/* Chat Header */}

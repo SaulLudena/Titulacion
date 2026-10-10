@@ -8,7 +8,7 @@ export default function Login() {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    console.log('Logging in:', { email, password })
+    //nota para mi, esto es temporal xd
     router.push('/dashboard/analyticteam/')
   }
 
