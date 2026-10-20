@@ -11,11 +11,19 @@ import {
   HiFolder,
   HiLogout,
   HiUser,
+  HiClock,
 } from 'react-icons/hi'
+
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://banco-andino-backend.vercel.app'
 
 export default function Sidebar({ role: customRole }) {
   const router = useRouter()
   const [currentRole, setCurrentRole] = useState('analista')
+  const [user, setUser] = useState({
+    nombre: 'Cargando...',
+    correo: '...',
+  })
 
   // Normalizar la cadena de rol
   const normalizeRole = (r) => {
@@ -30,7 +38,48 @@ export default function Sidebar({ role: customRole }) {
     return lower
   }
 
-  // Detectar el rol dinámicamente cada vez que la URL cambia
+  // Cargar datos reales del usuario autenticado
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const token =
+        localStorage.getItem('token') || sessionStorage.getItem('token')
+      if (!token) return
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/me`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        })
+
+        if (res.ok) {
+          const data = await res.json()
+          setUser({
+            nombre:
+              data.nombre ||
+              data.name ||
+              data.full_name ||
+              data.email?.split('@')[0] ||
+              'Usuario',
+            correo: data.correo || data.email || '',
+          })
+
+          const fetchedRole = normalizeRole(data.rol || data.role)
+          if (!customRole) {
+            setCurrentRole(fetchedRole)
+          }
+        }
+      } catch (error) {
+        console.error('Error al obtener perfil en Sidebar:', error)
+      }
+    }
+
+    fetchUserData()
+  }, [])
+
+  // Detectar el rol dinámicamente según props o URL
   useEffect(() => {
     if (customRole) {
       setCurrentRole(normalizeRole(customRole))
@@ -54,72 +103,7 @@ export default function Sidebar({ role: customRole }) {
     cumplimiento: 'Oficialía de Cumplimiento',
   }
 
-  // Datos de perfil según el rol actual (semillas del equipo)
-  const userProfiles = {
-    analista: {
-      nombre: 'Giacomo Delgado',
-      correo: 'giacomo.delgado@bancoandino.pe',
-      cargo: 'Analista de Datos',
-    },
-    ejecutivo: {
-      nombre: 'Wilson Cornejo',
-      correo: 'wilson.cornejo@bancoandino.pe',
-      cargo: 'Gerencia de Créditos',
-    },
-    cumplimiento: {
-      nombre: 'Jorge Cerdán',
-      correo: 'jorge.cerdan@bancoandino.pe',
-      cargo: 'Oficialía de Cumplimiento',
-    },
-  }
-
-  const currentUser = userProfiles[currentRole] || userProfiles.analista
-
-  // Menú compartido de Accesos y Gobierno / Seguimiento para Ejecutivo y Cumplimiento
-  const governanceSections = [
-    {
-      title: 'ACCESOS Y GOBIERNO',
-      items: [
-        {
-          name: 'Por aprobar',
-          path: '/dashboard/executive', // o su respectiva ruta según carpeta
-          icon: HiFolder,
-        },
-        {
-          name: 'Certificar dataset',
-          path: '/dashboard/executive/certify',
-          icon: HiShieldCheck,
-        },
-        {
-          name: 'Nuevo proceso core',
-          path: '/dashboard/executive/new-process',
-          icon: HiClipboardList,
-        },
-      ],
-    },
-    {
-      title: 'SEGUIMIENTO',
-      items: [
-        {
-          name: 'Indicadores',
-          path: '/dashboard/executive/indicators',
-          icon: HiChartBar,
-        },
-        {
-          name: 'Uso de datasets',
-          path: '/dashboard/executive/dataset-usage',
-          icon: HiDocumentReport,
-        },
-        {
-          name: 'Bitácora',
-          path: '/dashboard/executive/audit-log',
-          icon: HiDatabase,
-        },
-      ],
-    },
-  ]
-
-  // Configuración exacta de menús por rol
+  // Configuración de menús por rol
   const menuConfig = {
     analista: {
       sections: [
@@ -162,12 +146,12 @@ export default function Sidebar({ role: customRole }) {
             },
             {
               name: 'Certificar dataset',
-              path: '/dashboard/executive/certify',
+              path: '/dashboard/executive/certifydataset',
               icon: HiShieldCheck,
             },
             {
               name: 'Nuevo proceso core',
-              path: '/dashboard/executive/new-process',
+              path: '/dashboard/executive/newcoreprocess',
               icon: HiClipboardList,
             },
           ],
@@ -182,12 +166,12 @@ export default function Sidebar({ role: customRole }) {
             },
             {
               name: 'Uso de datasets',
-              path: '/dashboard/executive/dataset-usage',
+              path: '/dashboard/executive/datasetusage',
               icon: HiDocumentReport,
             },
             {
               name: 'Bitácora',
-              path: '/dashboard/executive/audit-log',
+              path: '/dashboard/executive/binnacle',
               icon: HiDatabase,
             },
           ],
@@ -197,42 +181,17 @@ export default function Sidebar({ role: customRole }) {
     cumplimiento: {
       sections: [
         {
-          title: 'ACCESOS Y GOBIERNO',
+          title: 'CUMPLIMIENTO',
           items: [
             {
-              name: 'Por aprobar',
+              name: 'Segunda aprobación',
               path: '/dashboard/complianceoffice',
-              icon: HiFolder,
-            },
-            {
-              name: 'Certificar dataset',
-              path: '/dashboard/complianceoffice/certify',
               icon: HiShieldCheck,
-            },
-            {
-              name: 'Nuevo proceso core',
-              path: '/dashboard/complianceoffice/new-process',
-              icon: HiClipboardList,
-            },
-          ],
-        },
-        {
-          title: 'SEGUIMIENTO',
-          items: [
-            {
-              name: 'Indicadores',
-              path: '/dashboard/complianceoffice/indicators',
-              icon: HiChartBar,
-            },
-            {
-              name: 'Uso de datasets',
-              path: '/dashboard/complianceoffice/dataset-usage',
-              icon: HiDocumentReport,
             },
             {
               name: 'Bitácora',
               path: '/dashboard/complianceoffice/audit-log',
-              icon: HiDatabase,
+              icon: HiClock,
             },
           ],
         },
@@ -242,10 +201,21 @@ export default function Sidebar({ role: customRole }) {
 
   const currentConfig = menuConfig[currentRole] || menuConfig.analista
 
+  // Cierre de sesión completo: limpia cookies, sessionStorage y localStorage
   const handleLogout = () => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('token')
+      localStorage.clear()
+      sessionStorage.clear()
+
+      const cookies = document.cookie.split(';')
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i]
+        const eqPos = cookie.indexOf('=')
+        const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim()
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
+      }
     }
+
     router.push('/')
   }
 
@@ -300,7 +270,7 @@ export default function Sidebar({ role: customRole }) {
         </div>
       </div>
 
-      {/* Bloque de Perfil de Usuario y Logout */}
+      {/* Bloque de Perfil de Usuario Real y Logout */}
       <div className="pt-4 border-t border-gray-200 space-y-3">
         <div className="flex items-center gap-3 px-2 py-1.5 bg-gray-50 border border-gray-100 rounded-none">
           <div className="w-7 h-7 bg-gray-200 text-gray-700 flex items-center justify-center rounded-none shrink-0 font-bold text-xs">
@@ -308,11 +278,9 @@ export default function Sidebar({ role: customRole }) {
           </div>
           <div className="overflow-hidden">
             <p className="text-xs font-semibold text-gray-900 truncate">
-              {currentUser.nombre}
+              {user.nombre}
             </p>
-            <p className="text-[10px] text-gray-500 truncate">
-              {currentUser.correo}
-            </p>
+            <p className="text-[10px] text-gray-500 truncate">{user.correo}</p>
           </div>
         </div>
 

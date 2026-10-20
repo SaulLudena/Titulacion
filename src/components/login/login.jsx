@@ -1,88 +1,123 @@
 import { useRouter } from 'next/router'
 import { useState } from 'react'
 
+const SUPABASE_TOKEN_URL =
+  'https://gaebnvdjzcfhjnqgkomg.supabase.co/auth/v1/token?grant_type=password'
+const SUPABASE_PUBLISHABLE_KEY =
+  'sb_publishable_jaR7gglbOnSLo315jrfMyw_FX5dlyXO'
+
+// Backend real (el base_url de la colección de Postman)
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://banco-andino-backend.vercel.app'
+
+// Mapeo de roles (los que devuelve el backend) a rutas
+const roleRoutes = {
+  analista: '/dashboard/analyticteam',
+  ejecutivo: '/dashboard/executive',
+  cumplimiento: '/dashboard/complianceoffice',
+}
+
+// Usuarios semilla del prototipo (solo rellenan y ejecutan el login real)
+const SEED_PASSWORD = 'bancoandino'
+const seedUsers = [
+  { label: 'Giacomo (Analista)', email: 'giacomo.delgado@bancoandino.pe' },
+  { label: 'Wilson (Ejecutivo)', email: 'wilson.cornejo@bancoandino.pe' },
+  { label: 'Jorge (Cumplimiento)', email: 'jorge.cerdan@bancoandino.pe' },
+]
+
 export default function Login() {
   const router = useRouter()
 
-  // Credenciales por defecto
   const [email, setEmail] = useState('giacomo.delgado@bancoandino.pe')
-  const [password, setPassword] = useState('bancoandino')
+  const [password, setPassword] = useState(SEED_PASSWORD)
   const [rememberMe, setRememberMe] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
 
-  // Estados
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // Mapeo de roles a rutas
-  const roleRoutes = {
-    analista: '/dashboard/analyticteam',
-    ejecutivo: '/dashboard/executive',
-    cumplimiento: '/dashboard/complianceoffice',
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  // Lógica única de login: la usan el formulario y los botones semilla.
+  // El destino sale SOLO del rol que devuelve /api/me. Si algo falla, se muestra error.
+  const login = async (loginEmail, loginPassword) => {
     setLoading(true)
     setError(null)
 
     try {
-      // 1. Obtener Token de Supabase Auth
-      const authRes = await fetch(
-        'https://gaebnvdjzcfhjnqgkomg.supabase.co/auth/v1/token?grant_type=password',
-        {
+      // 1. Autenticación con Supabase Auth
+      let authRes
+      try {
+        authRes = await fetch(SUPABASE_TOKEN_URL, {
           method: 'POST',
           headers: {
-            apikey: 'sb_publishable_jaR7gglbOnSLo315jrfMyw_FX5dlyXO',
+            apikey: SUPABASE_PUBLISHABLE_KEY,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ email, password }),
-        },
-      )
+          body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+        })
+      } catch {
+        throw new Error(
+          'No se pudo conectar con el servidor de autenticación. Revisa tu conexión.',
+        )
+      }
 
       if (!authRes.ok) {
-        throw new Error('Credenciales inválidas o error de autenticación.')
+        throw new Error(
+          authRes.status === 400 || authRes.status === 401
+            ? 'Correo o contraseña incorrectos.'
+            : 'Error de autenticación. Inténtalo nuevamente.',
+        )
       }
 
       const authData = await authRes.json()
       const token = authData.access_token
-      localStorage.setItem('token', token)
+      if (!token) {
+        throw new Error('La respuesta de autenticación no incluyó un token.')
+      }
 
-      // 2. Consulta a /api/me (Endpoint de la colección Postman)
+      // 2. Obtener el rol desde el backend (única fuente de verdad)
+      let meRes
       try {
-        const meRes = await fetch('/api/me', {
+        meRes = await fetch(`${API_BASE_URL}/api/me`, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
         })
+      } catch {
+        throw new Error('No se pudo consultar el perfil del usuario (/api/me).')
+      }
 
-        if (meRes.ok) {
-          const userData = await meRes.json()
-          // userData.rol o userData.role
-          const userRole = userData.rol || userData.role
-          if (userRole && roleRoutes[userRole.toLowerCase()]) {
-            router.push(roleRoutes[userRole.toLowerCase()])
-            return
-          }
-        }
-      } catch (meError) {
-        console.warn(
-          'Backend local /api/me no disponible, usando fallback por semilla',
-          meError,
+      if (!meRes.ok) {
+        throw new Error(
+          `No se pudo obtener el perfil del usuario (código ${meRes.status}).`,
         )
       }
 
-      // Fallback local por email si /api/me no responde aún
-      const lowerEmail = email.toLowerCase()
-      if (lowerEmail.includes('wilson.cornejo')) {
-        router.push(roleRoutes.ejecutivo)
-      } else if (lowerEmail.includes('jorge.cerdan')) {
-        router.push(roleRoutes.cumplimiento)
-      } else {
-        router.push(roleRoutes.analista)
+      const userData = await meRes.json()
+      const userRole = String(userData.rol || userData.role || '').toLowerCase()
+      const destination = roleRoutes[userRole]
+
+      if (!destination) {
+        throw new Error(
+          `Tu rol (${userRole || 'sin rol'}) no tiene un panel asignado.`,
+        )
       }
+
+      // 3. Todo salió bien: recién ahora se guarda la sesión
+      // "Mantener sesión" -> localStorage; si no, sessionStorage (se borra al cerrar la pestaña)
+      const storage = rememberMe ? localStorage : sessionStorage
+      localStorage.removeItem('token')
+      localStorage.removeItem('refresh_token')
+      sessionStorage.removeItem('token')
+      sessionStorage.removeItem('refresh_token')
+
+      storage.setItem('token', token)
+      if (authData.refresh_token) {
+        storage.setItem('refresh_token', authData.refresh_token)
+      }
+
+      await router.push(destination)
     } catch (err) {
       console.error(err)
       setError(err.message || 'Ocurrió un error al iniciar sesión.')
@@ -91,11 +126,16 @@ export default function Login() {
     }
   }
 
-  // Selección directa desde los botones del prototipo
-  const handleSelectSeedUser = (selectedEmail, roleKey) => {
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    login(email, password)
+  }
+
+  // Botones del prototipo: rellenan los campos y hacen el login real (sin saltarse la API)
+  const handleSelectSeedUser = (selectedEmail) => {
     setEmail(selectedEmail)
-    setPassword('bancoandino')
-    router.push(roleRoutes[roleKey])
+    setPassword(SEED_PASSWORD)
+    login(selectedEmail, SEED_PASSWORD)
   }
 
   return (
@@ -140,7 +180,10 @@ export default function Login() {
 
           {/* Mensaje de Error */}
           {error && (
-            <div className="mb-3 p-2.5 bg-red-50 border border-red-200 text-red-600 text-xs font-medium rounded-none">
+            <div
+              role="alert"
+              className="mb-3 p-2.5 bg-red-50 border border-red-200 text-red-600 text-xs font-medium rounded-none"
+            >
               {error}
             </div>
           )}
@@ -210,6 +253,9 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
+                  aria-label={
+                    showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'
+                  }
                   className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer"
                 >
                   <svg
@@ -285,12 +331,6 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Nota de Auditoría */}
-          <p className="mt-3 text-[11px] text-gray-400 leading-relaxed">
-            El acceso es solo por invitación. Cada inicio de sesión queda
-            registrado en la bitácora de auditoría.
-          </p>
-
           {/* Caja del Prototipo con Semillas */}
           <div className="mt-4 p-3 border border-dashed border-gray-300 rounded-none">
             <div className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-gray-500 uppercase mb-2">
@@ -298,44 +338,17 @@ export default function Login() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  handleSelectSeedUser(
-                    'giacomo.delgado@bancoandino.pe',
-                    'analista',
-                  )
-                }
-                className="px-2.5 py-1.5 border border-gray-200 text-xs font-medium text-gray-800 hover:bg-gray-50 bg-white cursor-pointer"
-              >
-                Giacomo (Analista)
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  handleSelectSeedUser(
-                    'wilson.cornejo@bancoandino.pe',
-                    'ejecutivo',
-                  )
-                }
-                className="px-2.5 py-1.5 border border-gray-200 text-xs font-medium text-gray-800 hover:bg-gray-50 bg-white cursor-pointer"
-              >
-                Wilson (Ejecutivo)
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  handleSelectSeedUser(
-                    'jorge.cerdan@bancoandino.pe',
-                    'cumplimiento',
-                  )
-                }
-                className="px-2.5 py-1.5 border border-gray-200 text-xs font-medium text-gray-800 hover:bg-gray-50 bg-white cursor-pointer"
-              >
-                Jorge (Cumplimiento)
-              </button>
+              {seedUsers.map((user) => (
+                <button
+                  key={user.email}
+                  type="button"
+                  disabled={loading}
+                  onClick={() => handleSelectSeedUser(user.email)}
+                  className="px-2.5 py-1.5 border border-gray-200 text-xs font-medium text-gray-800 hover:bg-gray-50 bg-white cursor-pointer disabled:opacity-50"
+                >
+                  {user.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>

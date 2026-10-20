@@ -5,9 +5,9 @@ import Viewfile from '@/src/components/dashboard/analyticteam/catalog/viewFile'
 
 export default function Viewfilepage() {
   const router = useRouter()
-  const { id } = router.query // Captura el ID desde la URL (ej: /dashboard/analyticteam/pago)
+  const { id } = router.query 
 
-  // Datos estáticos de ejemplo mapeados por ID/código
+
   const mockDatasets = {
     pago: {
       title: 'Pagos de cuotas',
