@@ -1,15 +1,11 @@
 import { useRouter } from 'next/router'
 import { useState } from 'react'
 
-const SUPABASE_TOKEN_URL =
-  'https://gaebnvdjzcfhjnqgkomg.supabase.co/auth/v1/token?grant_type=password'
+const SUPABASE_TOKEN_URL = process.env.NEXT_PUBLIC_SUPABASE_TOKEN_URL
 const SUPABASE_PUBLISHABLE_KEY =
-  'sb_publishable_jaR7gglbOnSLo315jrfMyw_FX5dlyXO'
-
-// Backend real (el base_url de la colección de Postman)
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'https://banco-andino-backend.vercel.app'
-
 // Mapeo de roles (los que devuelve el backend) a rutas
 const roleRoutes = {
   analista: '/dashboard/analyticteam',
