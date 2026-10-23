@@ -1,66 +1,153 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import CatalogItem from './catalogitem' // Ajusta la ruta según la estructura de tu proyecto
+import CatalogItem from './catalogitem'
+
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://banco-andino-backend.vercel.app'
 
 export default function Catalog() {
   const router = useRouter()
-  const [searchTerm, setSearchTerm] = useState('pagos de cuotas')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [datasets, setDatasets] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  // Data de ejemplo basada en tu interfaz
-  const datasets = [
-    {
-      id: 1,
-      title: 'Pagos de cuotas',
-      code: 'pago',
-      status: 'Certificado',
-      classification: 'Confidencial',
-      description:
-        'Pagos recibidos y aplicados a cuotas, por canal y medio de pago.',
-      domain: 'Cobranzas',
-      author: 'Sandra Valdivia Ponce',
-      date: '30 sep 2026',
-      hasAccess: false,
-    },
-    {
-      id: 2,
-      title: 'Cuotas',
-      code: 'cuota',
-      status: 'Certificado',
-      classification: 'Confidencial',
-      description:
-        'Cuotas exigibles de los últimos 12 meses y próximas a vencer, con días vencidos.',
-      domain: 'Cobranzas',
-      author: 'Sandra Valdivia Ponce',
-      date: '30 sep 2026',
-      hasAccess: true,
-    },
-    {
-      id: 3,
-      title: 'Pagos migrados 2023',
-      code: 'pago_2023_mig',
-      status: 'Borrador',
-      classification: 'Confidencial',
-      description:
-        'Pagos históricos migrados en 2023 desde el sistema anterior, con columnas renombradas.',
-      domain: 'Cobranzas',
-      author: 'Sandra Valdivia Ponce',
-      date: '15 ene 2024',
-      hasAccess: false,
-    },
-    {
-      id: 4,
-      title: 'Gestiones de cobranza',
-      code: 'gestion_cobranza',
-      status: 'En revisión',
-      classification: 'Restringida',
-      description:
-        'Gestiones de cobranza (llamadas, visitas, mensajes) por deudor, con su resultado y observaciones.',
-      domain: 'Cobranzas',
-      author: 'Sandra Valdivia Ponce',
-      date: '30 sep 2026',
-      hasAccess: false,
-    },
-  ]
+  // Estados para filtros avanzados de la barra lateral
+  const [selectedDominio, setSelectedDominio] = useState('')
+  const [selectedClasificacion, setSelectedClasificacion] = useState('')
+  const [selectedEstado, setSelectedEstado] = useState('')
+
+  // Carga real desde el endpoint GET /api/catalogo usando los query params de Postman
+  const fetchDatasetsFromBackend = async () => {
+    setLoading(true)
+    setError(null)
+
+    const token =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('token') || sessionStorage.getItem('token')
+        : null
+
+    try {
+      // Construcción de parámetros basada en la colección de Postman
+      const params = new URLSearchParams()
+      if (searchTerm.trim()) params.append('q', searchTerm.trim())
+      if (selectedDominio) params.append('dominio', selectedDominio)
+      if (selectedClasificacion)
+        params.append('clasificacion', selectedClasificacion.toLowerCase())
+      if (selectedEstado) params.append('estado', selectedEstado.toLowerCase())
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/catalogo?${params.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        },
+      )
+
+      if (!response.ok) {
+        throw new Error('No se pudo obtener el catálogo de datasets.')
+      }
+
+      const data = await response.json()
+      const rawList = Array.isArray(data)
+        ? data
+        : data.datasets || data.items || []
+
+      const formatted = rawList.map((item, index) => {
+        console.log('item crudo del backend', item)
+        const safeTitle =
+          typeof item.nombre === 'object'
+            ? item.nombre?.nombre
+            : item.nombre ||
+              item.nombre_negocio ||
+              item.title ||
+              `Dataset ${index + 1}`
+
+        const safeCode =
+          typeof item.codigo === 'object'
+            ? item.codigo?.codigo
+            : item.codigo || item.nombre_tecnico || item.code || 'dataset_code'
+
+        const safeStatus =
+          typeof item.estado === 'object'
+            ? item.estado?.nombre
+            : item.estado || 'Certificado'
+
+        const safeClassification =
+          typeof item.clasificacion === 'object'
+            ? item.clasificacion?.nombre || item.clasificacion?.sugerida_ia
+            : item.clasificacion || 'Confidencial'
+
+        const safeDescription =
+          typeof item.descripcion === 'object'
+            ? item.descripcion?.nombre
+            : item.descripcion ||
+              item.description ||
+              'Sin descripción disponible.'
+
+        const safeDomain =
+          typeof item.dominio === 'object'
+            ? item.dominio?.nombre || item.dominio?.codigo || 'Cobranzas'
+            : item.dominio || 'Cobranzas'
+
+        // Determinamos si el acceso es vigente según la propiedad 'mi_acceso' del backend
+        const hasActiveAccess =
+          item.mi_acceso === 'vigente' || item.hasAccess === true
+
+        // Extracción segura de la URL del dataset crudo o generación automática si el acceso es vigente
+        const datasetUrl =
+          item.url_dataset ||
+          item.dataset_url ||
+          item.url_crudo ||
+          item.endpoint_url ||
+          (hasActiveAccess
+            ? `${API_BASE_URL}/api/datasets/${item.id || item.dataset_id}/data`
+            : null)
+
+        return {
+          id: item.id || item.dataset_id,
+          title: String(safeTitle),
+          code: String(safeCode),
+          status: String(safeStatus),
+          classification: String(safeClassification),
+          description: String(safeDescription),
+          domain: String(safeDomain),
+          author:
+            item.autor ||
+            item.owner?.nombre ||
+            item.responsable ||
+            'Sandra Valdivia Ponce',
+          date: item.actualizado_en
+            ? new Date(item.actualizado_en).toLocaleDateString('es-ES', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+              })
+            : '30 sep 2026',
+          hasAccess: hasActiveAccess,
+          datasetUrl: datasetUrl, // <- URL enviada al item del catálogo
+        }
+      })
+
+      setDatasets(formatted)
+    } catch (err) {
+      console.error('Error al obtener datasets del backend:', err)
+      setError('No se pudieron cargar los datasets del backend.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Ejecutar búsqueda al cambiar filtros o montar componente
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchDatasetsFromBackend()
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchTerm, selectedDominio, selectedClasificacion, selectedEstado])
 
   return (
     <div className="space-y-6">
@@ -70,8 +157,8 @@ export default function Catalog() {
           Catálogo de datasets
         </h1>
         <p className="text-xs text-gray-500 mt-0.5">
-          Busca por nombre, dominio, clasificación o estado. Solo se muestran
-          metadatos.
+          Busca por nombre, dominio, clasificación o estado. Accede a las URLs
+          de tus datasets aprobados.
         </p>
       </div>
 
@@ -98,11 +185,14 @@ export default function Catalog() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-none text-sm text-gray-900 focus:outline-none focus:border-[#ea580c] focus:ring-1 focus:ring-[#ea580c] bg-white shadow-sm"
-            placeholder="Buscar datasets..."
+            placeholder="Buscar datasets (ej. pagos de cuotas)..."
           />
         </div>
-        <button className="px-6 py-2.5 bg-[#ea580c] hover:bg-[#d94e09] text-white text-xs font-semibold rounded-none shadow-sm transition-colors cursor-pointer">
-          Buscar
+        <button
+          onClick={fetchDatasetsFromBackend}
+          className="px-6 py-2.5 bg-[#ea580c] hover:bg-[#d94e09] text-white text-xs font-semibold rounded-none shadow-sm transition-colors cursor-pointer"
+        >
+          {loading ? 'Cargando...' : 'Buscar'}
         </button>
       </div>
 
@@ -117,13 +207,13 @@ export default function Catalog() {
             </h4>
             <div className="space-y-2 text-xs">
               {[
-                { name: 'Clientes', count: 2 },
-                { name: 'Originación', count: 3 },
-                { name: 'Cartera y riesgo', count: 2 },
-                { name: 'Garantías', count: 3 },
-                { name: 'Cobranzas', count: 9, checked: true },
-                { name: 'Buró externo', count: 3 },
-                { name: 'Catálogos y parámetros', count: 6 },
+                { name: 'Clientes' },
+                { name: 'Originación' },
+                { name: 'Cartera y riesgo' },
+                { name: 'Garantías' },
+                { name: 'Cobranzas' },
+                { name: 'Buró externo' },
+                { name: 'Catálogos y parámetros' },
               ].map((item, idx) => (
                 <label
                   key={idx}
@@ -131,15 +221,18 @@ export default function Catalog() {
                 >
                   <div className="flex items-center gap-2">
                     <input
-                      type="checkbox"
-                      defaultChecked={item.checked}
+                      type="radio"
+                      name="dominioFilter"
+                      checked={selectedDominio === item.name}
+                      onChange={() =>
+                        setSelectedDominio(
+                          selectedDominio === item.name ? '' : item.name,
+                        )
+                      }
                       className="w-4 h-4 text-[#ea580c] border-gray-300 rounded-none focus:ring-[#ea580c] accent-[#ea580c]"
                     />
                     <span>{item.name}</span>
                   </div>
-                  <span className="text-gray-400 text-[11px]">
-                    {item.count}
-                  </span>
                 </label>
               ))}
             </div>
@@ -153,28 +246,29 @@ export default function Catalog() {
               Clasificación
             </h4>
             <div className="space-y-2 text-xs">
-              {[
-                { name: 'Pública', count: 2 },
-                { name: 'Interna', count: 5 },
-                { name: 'Confidencial', count: 11 },
-                { name: 'Restringida', count: 10 },
-              ].map((item, idx) => (
-                <label
-                  key={idx}
-                  className="flex items-center justify-between text-gray-700 cursor-pointer hover:text-gray-900"
-                >
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 text-[#ea580c] border-gray-300 rounded-none focus:ring-[#ea580c] accent-[#ea580c]"
-                    />
-                    <span>{item.name}</span>
-                  </div>
-                  <span className="text-gray-400 text-[11px]">
-                    {item.count}
-                  </span>
-                </label>
-              ))}
+              {['Pública', 'Interna', 'Confidencial', 'Restringida'].map(
+                (name, idx) => (
+                  <label
+                    key={idx}
+                    className="flex items-center justify-between text-gray-700 cursor-pointer hover:text-gray-900"
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="clasificacionFilter"
+                        checked={selectedClasificacion === name}
+                        onChange={() =>
+                          setSelectedClasificacion(
+                            selectedClasificacion === name ? '' : name,
+                          )
+                        }
+                        className="w-4 h-4 text-[#ea580c] border-gray-300 rounded-none focus:ring-[#ea580c] accent-[#ea580c]"
+                      />
+                      <span>{name}</span>
+                    </div>
+                  </label>
+                ),
+              )}
             </div>
           </div>
 
@@ -186,43 +280,56 @@ export default function Catalog() {
               Estado
             </h4>
             <div className="space-y-2 text-xs">
-              {[
-                { name: 'Borrador', count: 12 },
-                { name: 'En revisión', count: 6 },
-                { name: 'Certificado', count: 9 },
-                { name: 'Deprecado', count: 1 },
-              ].map((item, idx) => (
-                <label
-                  key={idx}
-                  className="flex items-center justify-between text-gray-700 cursor-pointer hover:text-gray-900"
-                >
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 text-[#ea580c] border-gray-300 rounded-none focus:ring-[#ea580c] accent-[#ea580c]"
-                    />
-                    <span>{item.name}</span>
-                  </div>
-                  <span className="text-gray-400 text-[11px]">
-                    {item.count}
-                  </span>
-                </label>
-              ))}
+              {['Borrador', 'En revisión', 'Certificado', 'Deprecado'].map(
+                (name, idx) => (
+                  <label
+                    key={idx}
+                    className="flex items-center justify-between text-gray-700 cursor-pointer hover:text-gray-900"
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="estadoFilter"
+                        checked={selectedEstado === name}
+                        onChange={() =>
+                          setSelectedEstado(selectedEstado === name ? '' : name)
+                        }
+                        className="w-4 h-4 text-[#ea580c] border-gray-300 rounded-none focus:ring-[#ea580c] accent-[#ea580c]"
+                      />
+                      <span>{name}</span>
+                    </div>
+                  </label>
+                ),
+              )}
             </div>
           </div>
         </div>
 
         {/* Listado de Tarjetas a la Derecha */}
         <div className="lg:col-span-3 space-y-3">
-          {datasets.map((item) => (
-            <CatalogItem
-              key={item.id}
-              {...item}
-              onViewDetails={() =>
-                router.push(`/dashboard/analyticteam/${item.code}`)
-              }
-            />
-          ))}
+          {loading ? (
+            <div className="bg-white border border-gray-200 p-8 text-center text-xs text-gray-500">
+              Cargando datasets desde el servidor...
+            </div>
+          ) : error ? (
+            <div className="bg-red-50 border border-red-200 p-4 text-xs text-red-600 text-center">
+              {error}
+            </div>
+          ) : datasets.length === 0 ? (
+            <div className="bg-white border border-gray-200 p-8 text-center text-xs text-gray-500">
+              No se encontraron datasets que coincidan con la búsqueda.
+            </div>
+          ) : (
+            datasets.map((item) => (
+              <CatalogItem
+                key={item.id}
+                {...item}
+                onViewDetails={() =>
+                  router.push(`/dashboard/analyticteam/${item.id}`)
+                }
+              />
+            ))
+          )}
         </div>
       </div>
     </div>

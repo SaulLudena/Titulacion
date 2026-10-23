@@ -5,71 +5,40 @@ import {
   HiLockClosed,
   HiKey,
   HiChevronRight,
+  HiCheck,
+  HiExternalLink,
+  HiClipboardCopy,
 } from 'react-icons/hi'
 
 export default function ViewFile({ dataset, onBack, onRequestAccess }) {
-  // Datos de fallback por si no se pasa la prop de dataset
-  const data = dataset || {
-    title: 'Pagos de cuotas',
-    code: 'pago',
-    status: 'Certificado',
-    classification: 'Confidencial',
-    description:
-      'Pagos recibidos y aplicados a cuotas, por canal y medio de pago.',
-    columns: [
-      {
-        name: 'id_pago',
-        type: 'bigint',
-        key: 'PK',
-        description: 'Identificador único del pago.',
-        personalData: 'No',
-      },
-      {
-        name: 'id_cuota',
-        type: 'bigint',
-        key: 'FK — cuota',
-        description: 'Cuota a la que se aplicó el pago.',
-        personalData: 'No',
-      },
-      {
-        name: 'num_credito',
-        type: 'varchar(20)',
-        key: '—',
-        description: 'Crédito al que pertenece la cuota.',
-        personalData: 'No',
-      },
-      {
-        name: 'fec_pago',
-        type: 'date',
-        key: '—',
-        description: 'Fecha en que se recibió el pago.',
-        personalData: 'No',
-      },
-      {
-        name: 'imp_pago',
-        type: 'numeric(12,2)',
-        key: '—',
-        description: 'Importe pagado.',
-        personalData: 'No',
-      },
-      {
-        name: 'canal_pago',
-        type: 'varchar(20)',
-        key: '—',
-        description: 'Canal por el que ingresó el pago.',
-        personalData: 'No',
-      },
-    ],
-    metadata: {
-      source: 'Cobranzas y Pagos (PostgreSQL)',
-      originPath: 'neon_cobranzas / cobranzas / pago',
-      domain: 'Cobranzas',
-      owner: 'Sandra Valdivia Ponce · Gerencia de Cobranzas',
-      classification: 'Confidencial',
-      validity: 'Actualización diaria · Vigente',
-      lastUpdate: '30 sep 2026 · 06:12',
-      lineage: 'Viene de cuota · alimenta stg_pagos',
-    },
+  const [copied, setCopied] = React.useState(false)
+
+  // Si no llega el dataset, mostramos un estado vacío defensivo en lugar de datos quemados
+  if (!dataset) {
+    return (
+      <div className="bg-white border border-gray-200 p-8 text-center text-xs text-gray-500">
+        No hay información disponible para este dataset.
+      </div>
+    )
+  }
+
+  // Comprobamos si el acceso ya está vigente
+  const hasAccess = dataset.hasAccess || dataset.mi_acceso === 'vigente'
+
+  // Formateador para capitalizar textos como la clasificación (ej. "restringida" -> "Restringida")
+  const formatClassification = (text) => {
+    if (!text) return 'Restringida'
+    const cleanText =
+      typeof text === 'object' ? text.nombre || 'Restringida' : String(text)
+    return cleanText.charAt(0).toUpperCase() + cleanText.slice(1).toLowerCase()
+  }
+
+  const handleCopyUrl = () => {
+    if (dataset.datasetUrl) {
+      navigator.clipboard.writeText(dataset.datasetUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
   }
 
   return (
@@ -83,7 +52,7 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
           Catálogo
         </button>
         <HiChevronRight className="w-3 h-3 text-gray-400" />
-        <span className="font-semibold text-gray-900">{data.code}</span>
+        <span className="font-semibold text-gray-900">{dataset.code}</span>
       </nav>
 
       {/* Header del Dataset */}
@@ -95,31 +64,74 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-bold text-gray-900 tracking-tight">
-                {data.title}
+                {dataset.title}
               </h1>
               <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-0.5 border border-gray-200 rounded-none">
-                {data.code}
+                {dataset.code}
               </span>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-none">
                 <HiCheckCircle className="w-3.5 h-3.5 text-amber-600" />
-                {data.status}
+                {dataset.status}
               </span>
+              {/* Etiqueta de clasificación corregida con primera letra en mayúscula */}
               <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium text-orange-800 bg-orange-50 border border-orange-200 rounded-none">
                 <HiLockClosed className="w-3.5 h-3.5 text-orange-600" />
-                {data.classification}
+                {formatClassification(dataset.classification)}
               </span>
             </div>
           </div>
         </div>
 
-        <button
-          onClick={onRequestAccess}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#ea580c] hover:bg-[#d94e09] text-white text-xs font-semibold rounded-none shadow-sm transition-colors cursor-pointer shrink-0"
-        >
-          <HiKey className="w-4 h-4" />
-          <span>Solicitar acceso</span>
-        </button>
+        {/* Condicional para el Botón de Solicitud vs Acceso Vigente */}
+        {hasAccess ? (
+          <div className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-none shrink-0">
+            <HiCheck className="w-4 h-4 text-emerald-600" />
+            <span>Acceso Vigente</span>
+          </div>
+        ) : (
+          <button
+            onClick={onRequestAccess}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#ea580c] hover:bg-[#d94e09] text-white text-xs font-semibold rounded-none shadow-sm transition-colors cursor-pointer shrink-0"
+          >
+            <HiKey className="w-4 h-4" />
+            <span>Solicitar acceso</span>
+          </button>
+        )}
       </div>
+
+      {/* URL del Dataset Crudo (Visible si tiene acceso y URL disponible) */}
+      {hasAccess && dataset.datasetUrl && (
+        <div className="bg-emerald-50/60 border border-emerald-200 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+          <div className="space-y-0.5 overflow-hidden">
+            <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
+              URL del Dataset Crudo Aprobado:
+            </span>
+            <span className="text-xs font-mono text-emerald-950 break-all">
+              {dataset.datasetUrl}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleCopyUrl}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-none transition-colors cursor-pointer"
+            >
+              <HiClipboardCopy className="w-3.5 h-3.5" />
+              <span>{copied ? '¡Copiado!' : 'Copiar URL'}</span>
+            </button>
+            <a
+              href={dataset.datasetUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black hover:bg-gray-800 text-white text-xs font-medium rounded-none transition-colors cursor-pointer"
+            >
+              <span>Abrir</span>
+              <HiExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* Contenido de 2 columnas: Detalles e Información Lateral */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
@@ -131,7 +143,7 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
               Descripción
             </h3>
             <p className="text-xs text-gray-700 leading-relaxed">
-              {data.description}
+              {dataset.description}
             </p>
           </div>
 
@@ -140,7 +152,7 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <h3 className="text-sm font-bold text-gray-900">Esquema</h3>
               <span className="text-xs text-gray-400 font-medium">
-                {data.columns.length} de 9 columnas
+                {dataset.columns?.length || 0} columnas
               </span>
             </div>
 
@@ -157,28 +169,39 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 font-sans">
-                  {data.columns.map((col, idx) => (
-                    <tr
-                      key={idx}
-                      className="hover:bg-gray-50/50 transition-colors"
-                    >
-                      <td className="py-3 px-3 font-mono font-bold text-gray-900">
-                        {col.name}
-                      </td>
-                      <td className="py-3 px-3 font-mono text-gray-600">
-                        {col.type}
-                      </td>
-                      <td className="py-3 px-3 font-mono text-gray-500">
-                        {col.key}
-                      </td>
-                      <td className="py-3 px-3 text-gray-700">
-                        {col.description}
-                      </td>
-                      <td className="py-3 px-3 text-gray-500">
-                        {col.personalData}
+                  {dataset.columns && dataset.columns.length > 0 ? (
+                    dataset.columns.map((col, idx) => (
+                      <tr
+                        key={idx}
+                        className="hover:bg-gray-50/50 transition-colors"
+                      >
+                        <td className="py-3 px-3 font-mono font-bold text-gray-900">
+                          {col.name}
+                        </td>
+                        <td className="py-3 px-3 font-mono text-gray-600">
+                          {col.type}
+                        </td>
+                        <td className="py-3 px-3 font-mono text-gray-500">
+                          {col.key || '—'}
+                        </td>
+                        <td className="py-3 px-3 text-gray-700">
+                          {col.description || '—'}
+                        </td>
+                        <td className="py-3 px-3 text-gray-500">
+                          {col.personalData || 'No'}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan="5"
+                        className="py-4 text-center text-gray-400"
+                      >
+                        No hay columnas registradas en el esquema.
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -195,45 +218,44 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
             <div>
               <span className="text-gray-400 block mb-1">Fuente</span>
               <p className="font-medium text-gray-900">
-                {data.metadata?.source || 'Cobranzas y Pagos (PostgreSQL)'}
+                {dataset.metadata?.source || 'Base corporativa'}
               </p>
             </div>
 
             <div>
               <span className="text-gray-400 block mb-1">Ruta de origen</span>
               <p className="font-mono text-[11px] text-gray-700 break-all">
-                {data.metadata?.originPath ||
-                  'neon_cobranzas / cobranzas / pago'}
+                {dataset.metadata?.originPath || 'schema / table'}
               </p>
             </div>
 
             <div>
               <span className="text-gray-400 block mb-1">Dominio</span>
               <p className="font-medium text-gray-900">
-                {data.metadata?.domain || 'Cobranzas'}
+                {dataset.metadata?.domain || 'Cobranzas'}
               </p>
             </div>
 
             <div>
               <span className="text-gray-400 block mb-1">Data Owner</span>
               <p className="font-medium text-gray-900">
-                {data.metadata?.owner ||
-                  'Sandra Valdivia Ponce · Gerencia de Cobranzas'}
+                {dataset.metadata?.owner || 'Sandra Valdivia Ponce'}
               </p>
             </div>
 
             <div>
               <span className="text-gray-400 block mb-1">Clasificación</span>
+              {/* Clasificación del panel derecho corregida con primera letra en mayúscula */}
               <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium text-orange-800 bg-orange-50 border border-orange-200 rounded-none mt-0.5">
                 <HiLockClosed className="w-3.5 h-3.5 text-orange-600" />
-                {data.classification}
+                {formatClassification(dataset.classification)}
               </span>
             </div>
 
             <div>
               <span className="text-gray-400 block mb-1">Vigencia</span>
               <p className="font-medium text-gray-900">
-                {data.metadata?.validity || 'Actualización diaria · Vigente'}
+                {dataset.metadata?.validity || 'Vigente'}
               </p>
             </div>
 
@@ -242,15 +264,14 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
                 Última actualización
               </span>
               <p className="font-medium text-gray-900">
-                {data.metadata?.lastUpdate || '30 sep 2026 · 06:12'}
+                {dataset.metadata?.lastUpdate || 'Reciente'}
               </p>
             </div>
 
             <div>
               <span className="text-gray-400 block mb-1">Linaje</span>
               <p className="font-mono text-[11px] text-gray-700">
-                {data.metadata?.lineage ||
-                  'Viene de cuota · alimenta stg_pagos'}
+                {dataset.metadata?.lineage || 'N/A'}
               </p>
             </div>
           </div>

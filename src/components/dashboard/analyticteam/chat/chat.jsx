@@ -1,54 +1,33 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { useRouter } from 'next/router'
 import {
   HiCheckCircle,
   HiLockClosed,
   HiChevronDown,
   HiPaperAirplane,
-  HiSparkles,
 } from 'react-icons/hi'
 import { RiRobot2Fill } from 'react-icons/ri'
 
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://banco-andino-backend.vercel.app'
+
 export default function Chat() {
+  const router = useRouter()
   const [inputValue, setInputValue] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef(null)
 
-  // Historial de la conversación
+  // Historial inicia completamente vacío (sin hardcodeo)
   const [messages, setMessages] = useState([
     {
       id: 1,
-      sender: 'user',
-      text: '¿Dónde encuentro los pagos de las cuotas?',
-      initials: 'AT',
-    },
-    {
-      id: 2,
       sender: 'agent',
-      text: 'El dataset más adecuado es **Pagos de cuotas** (`pago`) [1]: contiene los pagos aplicados a cada cuota. Está certificado, es Confidencial y lo gestiona Sandra Valdivia Ponce. Para relacionarlo con su cuota usa `cuota` [2].',
-      datasets: [
-        {
-          id: '07d2ecb6-bc89-4fc8-bcee-9d1aeea90123',
-          title: 'Pagos de cuotas',
-          code: 'pago',
-          certified: true,
-          confidential: true,
-          owner: 'Sandra Valdivia Ponce',
-          highlighted: true,
-        },
-        {
-          id: 'a277a842-54ff-4d6c-8e97-bb266c0305bf',
-          title: 'Cuotas',
-          code: 'cuota',
-          certified: true,
-          confidential: true,
-          owner: 'Sandra Valdivia Ponce',
-          highlighted: false,
-        },
-      ],
+      text: '¡Hola! Soy el agente conversacional de Banco Andino. Pregúntame por cualquier dataset, dominio o métrica que necesites localizar.',
+      datasets: [],
     },
   ])
 
-  // Desplazamiento automático al enviar mensaje
+  // Desplazamiento automático hacia abajo al enviar o recibir mensajes
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
@@ -57,7 +36,7 @@ export default function Chat() {
     scrollToBottom()
   }, [messages, loading])
 
-  // CONSUMO DIRECTO DEL ENDPOINT POST /api/chat
+  // Consumo del endpoint real POST /api/chat
   const handleSendMessage = async (e) => {
     e?.preventDefault()
     if (!inputValue.trim() || loading) return
@@ -65,7 +44,7 @@ export default function Chat() {
     const questionText = inputValue.trim()
     setInputValue('')
 
-    // 1. Agregar el mensaje del usuario
+    // 1. Agregar el mensaje del usuario al chat
     const userMsg = {
       id: Date.now(),
       sender: 'user',
@@ -78,10 +57,12 @@ export default function Chat() {
 
     try {
       const token =
-        typeof window !== 'undefined' ? localStorage.getItem('token') : null
+        typeof window !== 'undefined'
+          ? localStorage.getItem('token') || sessionStorage.getItem('token')
+          : null
 
-      // Petición POST según especificación Postman (/api/chat)
-      const response = await fetch('/api/chat', {
+      // Petición POST al endpoint /api/chat del backend
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -100,34 +81,34 @@ export default function Chat() {
 
       const data = await response.json()
 
-      // Procesar la respuesta del servidor
+      // Procesar la respuesta del servidor de forma dinámica
       const botResponseText =
-        data.respuesta || data.message || data.resultado || JSON.stringify(data)
+        typeof data === 'string'
+          ? data
+          : data.respuesta ||
+            data.message ||
+            data.resultado ||
+            JSON.stringify(data)
 
       const agentMsg = {
         id: Date.now() + 1,
         sender: 'agent',
         text: botResponseText,
-        // Si el backend devuelve datasets o fuentes relacionadas, se pueden mapear dinámicamente
         datasets: data.datasets || [],
       }
 
       setMessages((prev) => [...prev, agentMsg])
     } catch (err) {
-      console.warn(
-        'Backend local /api/chat no disponible o devolvió un error:',
-        err.message,
-      )
+      console.warn('Backend /api/chat no disponible:', err.message)
 
-      // Fallback para no interrumpir la experiencia en el prototipo
-      const fallbackAgentMsg = {
+      const errorMsg = {
         id: Date.now() + 1,
         sender: 'agent',
-        text: `Consultando la base de conocimiento para "${questionText}": La información se encuentra catalogada bajo el módulo de gobierno. Puedes solicitar los permisos de acceso correspondientes.`,
+        text: 'Lo siento, ocurrió un error al procesar tu consulta con el servidor de IA. Por favor, intenta nuevamente.',
         datasets: [],
       }
 
-      setMessages((prev) => [...prev, fallbackAgentMsg])
+      setMessages((prev) => [...prev, errorMsg])
     } finally {
       setLoading(false)
     }
@@ -186,7 +167,7 @@ export default function Chat() {
                       {msg.text}
                     </p>
 
-                    {/* Renderizado dinámico de Tarjetas de Datasets adjuntas */}
+                    {/* Renderizado dinámico de Tarjetas de Datasets devueltas por la API */}
                     {msg.datasets &&
                       msg.datasets.map((ds, idx) => (
                         <div
@@ -200,50 +181,61 @@ export default function Chat() {
                           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="text-xs font-bold text-gray-900">
-                                {ds.title}
+                                {ds.title || ds.nombre}
                               </span>
                               <span className="text-xs font-mono text-gray-400 bg-gray-50 px-1 py-0.5 border border-gray-200">
-                                {ds.code}
+                                {ds.code || ds.codigo}
                               </span>
-                              {ds.certified && (
+                              {(ds.certified ||
+                                ds.estado === 'Certificado') && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-none">
                                   <HiCheckCircle className="w-3.5 h-3.5 text-amber-600" />
                                   Certificado
                                 </span>
                               )}
-                              {ds.confidential && (
+                              {(ds.confidential ||
+                                ds.clasificacion === 'Confidencial') && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium text-orange-800 bg-orange-50 border border-orange-200 rounded-none">
                                   <HiLockClosed className="w-3.5 h-3.5 text-orange-600" />
                                   Confidencial
                                 </span>
                               )}
                             </div>
-                            <button className="px-3 py-1 bg-black hover:bg-gray-800 text-white text-xs font-medium rounded-none transition-colors cursor-pointer">
+                            <button
+                              onClick={() =>
+                                router.push(`/dashboard/analyticteam/${ds.id}`)
+                              }
+                              className="px-3 py-1 bg-black hover:bg-gray-800 text-white text-xs font-medium rounded-none transition-colors cursor-pointer"
+                            >
                               Ver ficha
                             </button>
                           </div>
-                          <div className="flex items-center gap-2 text-[11px] text-gray-500 pt-1">
-                            <span className="text-gray-400">👤</span>
-                            <span>{ds.owner}</span>
-                          </div>
+                          {(ds.owner || ds.autor) && (
+                            <div className="flex items-center gap-2 text-[11px] text-gray-500 pt-1">
+                              <span className="text-gray-400">👤</span>
+                              <span>{ds.owner || ds.autor}</span>
+                            </div>
+                          )}
                         </div>
                       ))}
 
                     {/* Botón desplegable de fuentes */}
-                    <div>
-                      <button className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-none transition-colors cursor-pointer">
-                        <span>🔗</span>
-                        <span>Ver ruta y fuentes</span>
-                        <HiChevronDown className="w-3.5 h-3.5 text-gray-400" />
-                      </button>
-                    </div>
+                    {msg.datasets && msg.datasets.length > 0 && (
+                      <div>
+                        <button className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-none transition-colors cursor-pointer">
+                          <span>🔗</span>
+                          <span>Ver ruta y fuentes</span>
+                          <HiChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
             </React.Fragment>
           ))}
 
-          {/* Indicador de Estado Pensando / Cargando */}
+          {/* Indicador de Estado Cargando / Pensando */}
           {loading && (
             <div className="flex items-start gap-3">
               <div className="w-9 h-9 bg-[#ea580c] flex items-center justify-center rounded-none text-white text-lg shrink-0">
