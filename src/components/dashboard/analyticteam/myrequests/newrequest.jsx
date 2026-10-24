@@ -141,7 +141,7 @@ export default function NewRequest({
       }
 
       // Redireccionar al listado de solicitudes si todo sale bien
-      router.push('/dashboard/analyticteam/mis-solicitudes')
+      router.push('/dashboard/analyticteam/myrequestspage')
     } catch (err) {
       console.error('Error enviando la solicitud:', err)
       const finalMsg =

@@ -28,6 +28,21 @@ const normalize = (value) =>
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '')
 
+// Devuelve el texto de un campo que puede ser string u objeto ({ nombre, ... }).
+// Ojo: typeof null === 'object', por eso se valida que no sea null.
+const pickText = (field, keys = ['nombre'], fallback = '') => {
+  if (field && typeof field === 'object') {
+    for (const k of keys) if (field[k]) return field[k]
+    return fallback
+  }
+  return field || fallback
+}
+
+const getToken = () =>
+  typeof window !== 'undefined'
+    ? localStorage.getItem('token') || sessionStorage.getItem('token')
+    : null
+
 // Genera la lista de páginas con elipsis: [1, '...', 4, 5, 6, '...', 12]
 const buildPageList = (current, total) => {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
@@ -159,10 +174,7 @@ export default function Catalog() {
     setLoading(true)
     setError(null)
 
-    const token =
-      typeof window !== 'undefined'
-        ? localStorage.getItem('token') || sessionStorage.getItem('token')
-        : null
+    const token = getToken()
 
     try {
       const params = new URLSearchParams()
@@ -188,53 +200,52 @@ export default function Catalog() {
         ? data
         : data.datasets || data.items || []
 
+      // Para ver qué trae el listado, descomenta:
+      // console.log('Primer item del listado:', rawList[0])
+
       const formatted = rawList.map((item, index) => {
-        const safeTitle =
-          typeof item.nombre === 'object'
-            ? item.nombre?.nombre
-            : item.nombre ||
-              item.nombre_negocio ||
-              item.title ||
-              `Dataset ${index + 1}`
+        const safeTitle = pickText(
+          item.nombre,
+          ['nombre'],
+          item.nombre_negocio ||
+            item.nombre_tecnico ||
+            item.title ||
+            `Dataset ${index + 1}`,
+        )
 
-        const safeCode =
-          typeof item.codigo === 'object'
-            ? item.codigo?.codigo
-            : item.codigo || item.nombre_tecnico || item.code || 'dataset_code'
+        const safeCode = pickText(
+          item.codigo,
+          ['codigo'],
+          item.nombre_tecnico || item.code || 'dataset_code',
+        )
 
-        const safeStatus =
-          typeof item.estado === 'object'
-            ? item.estado?.nombre
-            : item.estado || 'Certificado'
+        const safeStatus = pickText(item.estado, ['nombre'], 'Certificado')
 
-        const safeClassification =
-          typeof item.clasificacion === 'object'
-            ? item.clasificacion?.nombre || item.clasificacion?.sugerida_ia
-            : item.clasificacion || 'Confidencial'
+        const safeClassification = pickText(
+          item.clasificacion,
+          ['nombre', 'sugerida_ia'],
+          'Sin clasificar',
+        )
 
-        const safeDescription =
-          typeof item.descripcion === 'object'
-            ? item.descripcion?.nombre
-            : item.descripcion ||
-              item.description ||
-              'Sin descripción disponible.'
+        const safeDescription = pickText(
+          item.descripcion,
+          ['nombre'],
+          item.description || 'Sin descripción disponible.',
+        )
 
-        const safeDomain =
-          typeof item.dominio === 'object'
-            ? item.dominio?.nombre || item.dominio?.codigo || 'Cobranzas'
-            : item.dominio || 'Cobranzas'
+        const safeDomain = pickText(
+          item.dominio,
+          ['nombre', 'codigo'],
+          'Cobranzas',
+        )
 
+        // Acceso vigente, o solicitud aprobada con acceso vigente
         const hasActiveAccess =
-          item.mi_acceso === 'vigente' || item.hasAccess === true
-
-        const datasetUrl =
-          item.url_dataset ||
-          item.dataset_url ||
-          item.url_crudo ||
-          item.endpoint_url ||
-          (hasActiveAccess
-            ? `${API_BASE_URL}/api/datasets/${item.id || item.dataset_id}/data`
-            : null)
+          item.mi_acceso === 'vigente' ||
+          item.hasAccess === true ||
+          item.descarga?.disponible === true ||
+          (item.solicitud?.estado === 'aprobada' &&
+            item.solicitud?.estado_acceso === 'vigente')
 
         return {
           id: item.id || item.dataset_id,
@@ -257,7 +268,9 @@ export default function Catalog() {
               })
             : '30 sep 2026',
           hasAccess: hasActiveAccess,
-          datasetUrl,
+          solicitud: item.solicitud || null,
+          // Objeto { disponible, url, archivo, formato, ... }
+          descarga: item.descarga || null,
         }
       })
 
