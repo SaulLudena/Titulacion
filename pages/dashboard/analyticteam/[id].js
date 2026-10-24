@@ -6,6 +6,14 @@ import AnalyticTeamLayout from '@/src/components/dashboard/analyticteam/analytic
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'https://banco-andino-backend.vercel.app'
 
+// Etiquetas legibles para el estado del dataset
+const ESTADOS_LABEL = {
+  borrador: 'Borrador',
+  en_revision: 'En revisión',
+  certificado: 'Certificado',
+  deprecado: 'Deprecado',
+}
+
 export default function Viewfilepage() {
   const router = useRouter()
   const { id } = router.query
@@ -43,6 +51,9 @@ export default function Viewfilepage() {
         }
 
         const result = await response.json()
+
+        // Para depurar, descomenta:
+        // console.log('descarga:', result.descarga)
 
         // Mapeo defensivo basado en el JSON real de tu API
         const safeOwner =
@@ -83,28 +94,30 @@ export default function Viewfilepage() {
           }
         })
 
-        // Determinamos el acceso vigente y la URL del dataset
+        // Acceso vigente
         const hasActiveAccess =
           result.mi_acceso === 'vigente' || result.hasAccess === true
-        const datasetUrl =
-          result.url_dataset ||
-          result.dataset_url ||
-          result.url_crudo ||
-          result.endpoint_url ||
-          null
+
+        // La URL firmada viene en result.descarga.url
+        const datasetUrl = result.descarga?.url ?? null
 
         const formatted = {
           id: result.id || id,
           title: result.nombre_negocio || result.nombre_tecnico || 'Dataset',
           code: result.nombre_tecnico || 'codigo',
-          status: result.estado === 'borrador' ? 'Borrador' : 'Certificado',
+          status: ESTADOS_LABEL[result.estado] || result.estado || 'Borrador',
 
           classification: safeClassification,
           description: result.descripcion || 'Sin descripción disponible.',
           columns: formattedColumns,
           hasAccess: hasActiveAccess,
           mi_acceso: result.mi_acceso,
+
+          // Datos de descarga
           datasetUrl: datasetUrl,
+          descarga: result.descarga ?? null,
+          solicitud: result.solicitud ?? null,
+
           metadata: {
             source: safeSource,
             originPath: `${result.capa || 'gold'} / ${result.esquema_origen || 'schema'} / ${result.nombre_tecnico || 'tabla'}`,

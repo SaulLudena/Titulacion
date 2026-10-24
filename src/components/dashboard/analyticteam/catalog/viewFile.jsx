@@ -8,6 +8,7 @@ import {
   HiCheck,
   HiExternalLink,
   HiClipboardCopy,
+  HiDownload,
 } from 'react-icons/hi'
 
 export default function ViewFile({ dataset, onBack, onRequestAccess }) {
@@ -25,6 +26,19 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
   // Comprobamos si el acceso ya está vigente
   const hasAccess = dataset.hasAccess || dataset.mi_acceso === 'vigente'
 
+  // Solicitud aprobada (acepta tanto el objeto crudo como el ya mapeado)
+  const isApproved =
+    dataset.solicitud?.estado === 'aprobada' ||
+    dataset.requestStatus === 'aprobada' ||
+    hasAccess
+
+  // URL de descarga: soporta el dataset mapeado (datasetUrl) y la respuesta cruda (descarga.url)
+  const downloadUrl = dataset.datasetUrl || dataset.descarga?.url || null
+  const downloadAvailable = dataset.descarga?.disponible !== false
+
+  // El botón solo se activa si está aprobado/vigente y existe una URL
+  const canDownload = isApproved && downloadAvailable && Boolean(downloadUrl)
+
   // Formateador para capitalizar textos como la clasificación (ej. "restringida" -> "Restringida")
   const formatClassification = (text) => {
     if (!text) return 'Restringida'
@@ -34,8 +48,8 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
   }
 
   const handleCopyUrl = () => {
-    if (dataset.datasetUrl) {
-      navigator.clipboard.writeText(dataset.datasetUrl)
+    if (downloadUrl) {
+      navigator.clipboard.writeText(downloadUrl)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }
@@ -73,7 +87,6 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
                 <HiCheckCircle className="w-3.5 h-3.5 text-amber-600" />
                 {dataset.status}
               </span>
-              {/* Etiqueta de clasificación corregida con primera letra en mayúscula */}
               <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium text-orange-800 bg-orange-50 border border-orange-200 rounded-none">
                 <HiLockClosed className="w-3.5 h-3.5 text-orange-600" />
                 {formatClassification(dataset.classification)}
@@ -82,11 +95,35 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
           </div>
         </div>
 
-        {/* Condicional para el Botón de Solicitud vs Acceso Vigente */}
+        {/* Solicitud de acceso vs Acceso vigente + Descargar */}
         {hasAccess ? (
-          <div className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-none shrink-0">
-            <HiCheck className="w-4 h-4 text-emerald-600" />
-            <span>Acceso Vigente</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-none">
+              <HiCheck className="w-4 h-4 text-emerald-600" />
+              <span>Acceso Vigente</span>
+            </div>
+
+            {canDownload ? (
+              <a
+                href={downloadUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#ea580c] hover:bg-[#d94e09] text-white text-xs font-semibold rounded-none shadow-sm transition-colors cursor-pointer"
+              >
+                <HiDownload className="w-4 h-4" />
+                <span>Descargar</span>
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                title="La URL de descarga no está disponible"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-200 text-gray-400 text-xs font-semibold rounded-none cursor-not-allowed"
+              >
+                <HiDownload className="w-4 h-4" />
+                <span>Descargar</span>
+              </button>
+            )}
           </div>
         ) : (
           <button
@@ -99,15 +136,15 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
         )}
       </div>
 
-      {/* URL del Dataset Crudo (Visible si tiene acceso y URL disponible) */}
-      {hasAccess && dataset.datasetUrl && (
+      {/* URL del Dataset Crudo (visible si tiene acceso y URL disponible) */}
+      {hasAccess && downloadUrl && (
         <div className="bg-emerald-50/60 border border-emerald-200 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
           <div className="space-y-0.5 overflow-hidden">
             <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
               URL del Dataset Crudo Aprobado:
             </span>
             <span className="text-xs font-mono text-emerald-950 break-all">
-              {dataset.datasetUrl}
+              {downloadUrl}
             </span>
           </div>
 
@@ -121,7 +158,7 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
               <span>{copied ? '¡Copiado!' : 'Copiar URL'}</span>
             </button>
             <a
-              href={dataset.datasetUrl}
+              href={downloadUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black hover:bg-gray-800 text-white text-xs font-medium rounded-none transition-colors cursor-pointer"
@@ -245,7 +282,6 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
 
             <div>
               <span className="text-gray-400 block mb-1">Clasificación</span>
-              {/* Clasificación del panel derecho corregida con primera letra en mayúscula */}
               <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium text-orange-800 bg-orange-50 border border-orange-200 rounded-none mt-0.5">
                 <HiLockClosed className="w-3.5 h-3.5 text-orange-600" />
                 {formatClassification(dataset.classification)}
