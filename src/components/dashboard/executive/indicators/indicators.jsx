@@ -35,7 +35,6 @@ const SERIES = [
   },
 ]
 
-// Las series pueden venir como arreglo o dentro de una propiedad
 const puntosDe = (d) => {
   let arr = []
   if (Array.isArray(d)) arr = d
@@ -62,8 +61,8 @@ const etiquetaFecha = (f) => {
 }
 
 function Grafico({ series }) {
-  const W = 800
-  const H = 260
+  const W = 1200
+  const H = 280
   const M = { t: 16, r: 24, b: 32, l: 36 }
 
   const fechas = [
@@ -73,11 +72,13 @@ function Grafico({ series }) {
     .flatMap((s) => s.puntos.map((p) => p.valor))
     .filter((v) => v != null)
 
-  if (fechas.length === 0) {
+  if (fechas.length === 0 || series.every((s) => s.puntos.length === 0)) {
     return (
-      <p className="text-xs text-gray-500 py-10 text-center">
-        Aún no hay datos de evolución.
-      </p>
+      <div className="flex items-center justify-center h-[280px] bg-gray-50 border border-dashed border-gray-200 w-full">
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Sin datos
+        </p>
+      </div>
     )
   }
 
@@ -160,6 +161,27 @@ function Grafico({ series }) {
   )
 }
 
+function EstadoBadge({ ind }) {
+  if (!ind) return null
+  if (ind.cumple === true)
+    return (
+      <span className="bg-black text-white px-1.5 py-0.5 text-[9px] font-bold uppercase">
+        Cumple
+      </span>
+    )
+  if (ind.cumple === false)
+    return (
+      <span className="bg-[#ea580c] text-white px-1.5 py-0.5 text-[9px] font-bold uppercase">
+        No cumple
+      </span>
+    )
+  return (
+    <span className="border border-gray-300 text-gray-500 px-1.5 py-0.5 text-[9px] font-bold uppercase">
+      {ind.meta == null ? 'Sin meta' : 'Sin datos'}
+    </span>
+  )
+}
+
 function Estado({ ind }) {
   if (ind.cumple === true)
     return (
@@ -191,7 +213,6 @@ export default function Indicators() {
   useEffect(() => {
     Promise.all([
       apiFetch('/api/tablero'),
-      // si una serie falla, el resto de la pantalla sigue funcionando
       ...SERIES.map((s) =>
         apiFetch(`/api/tablero/series/${s.codigo}`).catch(() => null),
       ),
@@ -221,8 +242,16 @@ export default function Indicators() {
       valor: tablero.datasets_catalogados ?? '—',
       variante: 'dark',
     },
-    { titulo: 'Con responsable', valor: formatear(porCodigo('GOB-01')) },
-    { titulo: 'Certificados', valor: formatear(porCodigo('GOB-03')) },
+    {
+      titulo: 'Con responsable',
+      valor: formatear(porCodigo('GOB-01')),
+      indicador: porCodigo('GOB-01'),
+    },
+    {
+      titulo: 'Certificados',
+      valor: formatear(porCodigo('GOB-03')),
+      indicador: porCodigo('GOB-03'),
+    },
     {
       titulo: 'Solicitudes pendientes',
       valor: tablero.solicitudes_pendientes ?? '—',
@@ -231,11 +260,12 @@ export default function Indicators() {
     {
       titulo: 'Tiempo medio de atención',
       valor: formatear(porCodigo('GOB-04')),
+      indicador: porCodigo('GOB-04'),
     },
   ]
 
   return (
-    <div className="font-sans text-gray-900 max-w-7xl space-y-8">
+    <div className="font-sans text-gray-900 w-full space-y-8">
       <h1 className="text-2xl font-bold text-gray-900">
         Indicadores de gobierno
       </h1>
@@ -247,7 +277,7 @@ export default function Indicators() {
       )}
 
       {/* Tarjetas */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full">
         {tarjetas.map((t) => {
           const bg =
             t.variante === 'dark'
@@ -264,13 +294,16 @@ export default function Indicators() {
           return (
             <div
               key={t.titulo}
-              className={`${bg} p-5 shadow-sm flex flex-col justify-between`}
+              className={`${bg} p-5 shadow-sm flex flex-col justify-between w-full`}
             >
-              <p
-                className={`text-[11px] font-medium uppercase tracking-wider ${sub}`}
-              >
-                {t.titulo}
-              </p>
+              <div className="flex items-center justify-between">
+                <p
+                  className={`text-[11px] font-medium uppercase tracking-wider ${sub}`}
+                >
+                  {t.titulo}
+                </p>
+                {t.indicador && <EstadoBadge ind={t.indicador} />}
+              </div>
               <p className="text-3xl font-bold mt-4 tracking-tight">
                 {t.valor}
               </p>
@@ -280,7 +313,7 @@ export default function Indicators() {
       </div>
 
       {/* Evolución */}
-      <div className="bg-white border border-gray-200 shadow-sm p-6">
+      <div className="bg-white border border-gray-200 shadow-sm p-6 w-full">
         <div className="mb-6">
           <h2 className="text-sm font-bold text-gray-900">Evolución</h2>
           <p className="text-[11px] text-gray-500">% sobre datasets activos</p>
@@ -302,7 +335,7 @@ export default function Indicators() {
       </div>
 
       {/* Detalle de todos los indicadores */}
-      <div className="space-y-6">
+      <div className="space-y-6 w-full">
         <h2 className="text-sm font-bold text-gray-900">
           Detalle de indicadores
         </h2>
@@ -311,11 +344,11 @@ export default function Indicators() {
           const grupo = inds.filter((i) => i.ambito === clave)
           if (grupo.length === 0) return null
           return (
-            <div key={clave}>
+            <div key={clave} className="w-full">
               <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-2">
                 {titulo}
               </p>
-              <div className="bg-white border border-gray-200 shadow-sm overflow-x-auto">
+              <div className="bg-white border border-gray-200 shadow-sm overflow-x-auto w-full">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-gray-200 text-left text-gray-500">

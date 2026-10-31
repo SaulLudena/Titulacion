@@ -1,81 +1,33 @@
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 import { useRouter } from 'next/router'
+import { HiLockClosed, HiArrowLeft } from 'react-icons/hi'
 
-const API_BASE_URL = 'https://banco-andino-backend.vercel.app'
-
-export default function ProtectedRoute({ children, allowedRole }) {
+export default function UnauthorizedPage() {
   const router = useRouter()
-  const [authorized, setAuthorized] = useState(false)
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const verifyAccess = async () => {
-      const token =
-        typeof window !== 'undefined'
-          ? localStorage.getItem('token') || sessionStorage.getItem('token')
-          : null
-
-      if (!token) {
-        router.push('/')
-        return
-      }
-
-      try {
-        // Validación en tiempo real contra el backend del Banco Andino
-        const res = await fetch(`${API_BASE_URL}/api/me`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        })
-
-        if (!res.ok) {
-          throw new Error('Token inválido o expirado')
-        }
-
-        const userData = await res.json()
-        const userRole = String(
-          userData.rol || userData.role || '',
-        ).toLowerCase()
-        const requiredRole = allowedRole.toLowerCase()
-
-        // Verificamos si el rol coincide con la ruta protegida
-        if (
-          userRole.includes(requiredRole) ||
-          requiredRole.includes(userRole)
-        ) {
-          setAuthorized(true)
-        } else {
-          // Si no le corresponde, lo mandamos a la vista de acceso restringido
-          router.push('/unauthorized')
-        }
-      } catch (err) {
-        console.error('Error de autorización:', err)
-        localStorage.clear()
-        sessionStorage.clear()
-        router.push('/')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    verifyAccess()
-  }, [router, allowedRole])
-
-  if (loading) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-white font-sans">
-        <div className="text-xs text-gray-500 animate-pulse font-medium">
-          Verificando permisos corporativos...
+  return (
+    <div className="flex h-screen w-screen items-center justify-center bg-white font-sans">
+      <div className="max-w-md w-full border border-gray-200 p-8 text-center space-y-4 shadow-sm">
+        <div className="w-12 h-12 bg-red-50 text-red-600 flex items-center justify-center mx-auto">
+          <HiLockClosed className="w-6 h-6" />
         </div>
+        <div>
+          <h1 className="text-base font-bold text-gray-900">
+            Acceso No Autorizado
+          </h1>
+          <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+            No cuentas con el rol corporativo necesario para visualizar esta
+            sección de Banco Andino.
+          </p>
+        </div>
+        <button
+          onClick={() => router.push('/')}
+          className="w-full py-2.5 bg-black hover:bg-gray-800 text-white text-xs font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer"
+        >
+          <HiArrowLeft className="w-4 h-4" />
+          <span>Volver al inicio de sesión</span>
+        </button>
       </div>
-    )
-  }
-
-  if (!authorized) {
-    return null
-  }
-
-  return <>{children}</>
+    </div>
+  )
 }

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
-import { HiCheck, HiX, HiClock } from 'react-icons/hi'
+import { HiCheck, HiX, HiClock, HiExclamation } from 'react-icons/hi'
 import { apiFetch } from '../../../../libs/api'
 
 const VOLVER = '/dashboard/executive/certifydataset'
@@ -16,10 +16,13 @@ const ETIQUETAS = {
   descripcion: 'Descripción',
   clasificacion: 'Clasificación',
   contiene_datos_personales: 'Datos personales',
+  owner: 'Data Owner',
   propietario_tecnico: 'Propietario técnico',
   frecuencia_sla: 'Frecuencia de actualización',
-  columnas_sin_evaluar_dato_personal: 'Datos personales por columna',
+  ultima_actualizacion: 'Última actualización',
   linaje: 'Linaje',
+  columnas_activas: 'Al menos una columna activa',
+  columnas_sin_evaluar_dato_personal: 'Datos personales por columna',
 }
 
 const siNo = (v) => (v === true ? 'Sí' : v === false ? 'No' : null)
@@ -29,6 +32,80 @@ const btn =
 const btnSec =
   'border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold py-1.5 px-3 text-[11px] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
 
+// ---------- Controles ----------
+
+function Segmented({
+  name,
+  options,
+  value,
+  onChange,
+  disabled = false,
+  compact = false,
+  ariaLabel,
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      className="inline-flex border border-gray-300 bg-white overflow-hidden"
+    >
+      {options.map((o, i) => {
+        const selected = value === o.value
+        return (
+          <label
+            key={String(o.value)}
+            className={`relative select-none text-xs transition-colors focus-within:ring-2 focus-within:ring-inset focus-within:ring-[#ea580c] ${
+              compact ? 'px-3 py-1.5' : 'px-4 py-2'
+            } ${i > 0 ? 'border-l border-gray-300' : ''} ${
+              selected
+                ? 'bg-black text-white font-bold'
+                : 'bg-white text-gray-700 font-medium hover:bg-gray-50'
+            } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          >
+            <input
+              type="radio"
+              name={name}
+              value={String(o.value)}
+              checked={selected}
+              disabled={disabled}
+              onChange={() => onChange(o.value)}
+              className="sr-only"
+            />
+            {o.label}
+          </label>
+        )
+      })}
+    </div>
+  )
+}
+
+function Toggle({ checked, onChange, disabled = false, label }) {
+  return (
+    <div className="inline-flex items-center gap-2">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ea580c] focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+          checked ? 'bg-[#ea580c]' : 'bg-gray-300'
+        }`}
+      >
+        <span
+          className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+            checked ? 'translate-x-[18px]' : 'translate-x-0.5'
+          }`}
+        />
+      </button>
+      <span className="text-xs font-medium text-gray-800">
+        {checked ? 'Sí' : 'No'}
+      </span>
+    </div>
+  )
+}
+
 export default function DetailCertify({ id }) {
   const router = useRouter()
   const [d, setD] = useState(null)
@@ -36,6 +113,7 @@ export default function DetailCertify({ id }) {
   const [comentario, setComentario] = useState('')
   const [edit, setEdit] = useState(null)
   const [verColumnas, setVerColumnas] = useState(false)
+  const [evals, setEvals] = useState({})
   const [cats, setCats] = useState({})
   const [confirmar, setConfirmar] = useState(false)
   const [cargando, setCargando] = useState(true)
@@ -43,6 +121,8 @@ export default function DetailCertify({ id }) {
   const [error, setError] = useState(null)
   const [toast, setToast] = useState(null)
   const comentarioEditado = useRef(false)
+  const columnasRef = useRef(null)
+  const errorRef = useRef(null)
 
   const avisar = (msg) => {
     setToast(msg)
@@ -50,15 +130,18 @@ export default function DetailCertify({ id }) {
   }
 
   const cargar = useCallback(async () => {
+    if (!id) return
     try {
       const v = await apiFetch(`/api/datasets/${id}/validacion`)
       setD(v)
 
       if (!comentarioEditado.current) {
-        const faltan = v.metadatos_faltantes
+        const faltan = (v.metadatos_faltantes ?? [])
           .filter((k) => k !== 'columnas_sin_evaluar_dato_personal')
           .map((k) => (ETIQUETAS[k] ?? k).toLowerCase())
-        const sin = v.columnas.filter((c) => c.es_dato_personal === null).length
+        const sin = (v.columnas ?? []).filter(
+          (c) => c.es_dato_personal == null,
+        ).length
         if (sin > 0)
           faltan.push(`evaluar los datos personales de ${sin} columnas`)
         setComentario(faltan.length ? `Falta: ${faltan.join(', ')}.` : '')
@@ -91,6 +174,21 @@ export default function DetailCertify({ id }) {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    if (verColumnas) {
+      columnasRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    }
+  }, [verColumnas])
+
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [error])
+
   const ejecutar = async (fn, okMsg) => {
     try {
       setEnviando(true)
@@ -116,25 +214,13 @@ export default function DetailCertify({ id }) {
     }, okMsg)
 
   const aceptarIA = () =>
-    ejecutar(
-      () =>
-        apiFetch(`/api/datasets/${id}/sugerencias-ia/aceptar`, {
-          method: 'POST',
-        }),
-      'Sugerencias de la IA aceptadas',
-    )
-
-  const evaluarColumna = (c, esPersonal) => {
-    const body = { es_dato_personal: esPersonal }
-    if (esPersonal) {
-      const cat = cats[c.id] ?? c.categoria_dato_personal
-      if (cat) body.categoria_dato_personal = cat
-    }
-    return ejecutar(
-      () => apiFetch(`/api/columnas/${c.id}`, { method: 'PATCH', body }),
-      `Columna ${c.nombre} evaluada`,
-    )
-  }
+    ejecutar(async () => {
+      await apiFetch(`/api/datasets/${id}/sugerencias-ia/aceptar`, {
+        method: 'POST',
+      })
+      setEvals({})
+      setCats({})
+    }, 'Sugerencias de la IA aceptadas')
 
   const certificar = async () => {
     setConfirmar(false)
@@ -175,9 +261,70 @@ export default function DetailCertify({ id }) {
       <p className="text-xs text-[#ea580c]">No se pudo cargar ({error}).</p>
     )
 
-  const evaluadas = d.columnas.filter((c) => c.es_dato_personal !== null).length
+  const columnas = d.columnas ?? []
+  const faltantes = d.metadatos_faltantes ?? []
+  const categorias = d.categorias_dato_personal ?? []
+
+  const evaluadas = columnas.filter((c) => c.es_dato_personal != null).length
   const nombreClasif = (codigo) =>
     clasifs.find((c) => c.codigo === codigo)?.nombre ?? codigo
+  const nombreCategoria = (codigo) =>
+    categorias.find((k) => k.codigo === codigo)?.nombre ?? codigo
+
+  const valorCol = (c) =>
+    evals[c.id] !== undefined ? evals[c.id] : (c.es_dato_personal ?? null)
+
+  const cambios = columnas.filter((c) => {
+    const v = valorCol(c)
+    if (v == null) return false
+    if (v !== c.es_dato_personal) return true
+    if (v === true) {
+      const cat = cats[c.id]
+      return cat !== undefined && cat !== (c.categoria_dato_personal ?? '')
+    }
+    return false
+  })
+
+  const cancelarEvaluacion = () => {
+    setEvals({})
+    setCats({})
+    setVerColumnas(false)
+  }
+
+  const guardarEvaluacion = async () => {
+    if (cambios.length === 0) return
+    setEnviando(true)
+    setError(null)
+
+    const fallidas = []
+    for (const c of cambios) {
+      const v = valorCol(c)
+      const body = { es_dato_personal: v }
+      if (v) {
+        const cat = cats[c.id] ?? c.categoria_dato_personal
+        if (cat) body.categoria_dato_personal = cat
+      }
+      try {
+        await apiFetch(`/api/columnas/${c.id}`, { method: 'PATCH', body })
+      } catch (e) {
+        fallidas.push(`${c.nombre}: ${e.message}`)
+      }
+    }
+
+    await cargar()
+
+    if (fallidas.length === 0) {
+      setEvals({})
+      setCats({})
+      setVerColumnas(false)
+      avisar('Evaluación guardada')
+    } else {
+      setError(
+        `No se pudo guardar ${fallidas.length} columna(s). ${fallidas.join(' · ')}`,
+      )
+    }
+    setEnviando(false)
+  }
 
   const filas = [
     {
@@ -232,26 +379,37 @@ export default function DetailCertify({ id }) {
       guardar: (v) => patchMetadatos({ propietario_tecnico: v }),
     },
     { key: 'frecuencia_sla', valor: d.frecuencia_sla, soloLectura: true },
-    { key: 'fuente', label: 'Fuente', valor: d.fuente, soloLectura: true },
+    {
+      key: 'ultima_actualizacion',
+      valor: d.ultima_actualizacion,
+      soloLectura: true,
+    },
+    { key: 'linaje', valor: d.linaje, soloLectura: true },
+    {
+      key: 'columnas_activas',
+      valor: d.columnas_activas ?? 'Registradas',
+      soloLectura: true,
+    },
     {
       key: 'columnas_sin_evaluar_dato_personal',
-      valor: `${evaluadas} de ${d.columnas.length} evaluadas`,
+      valor: `${evaluadas} de ${columnas.length} evaluadas`,
       columnas: true,
     },
   ]
 
   const conocidas = filas.map((f) => f.key)
-  const extras = d.metadatos_faltantes
+  const extras = faltantes
     .filter((k) => !conocidas.includes(k))
     .map((k) => ({ key: k, valor: null, soloLectura: true }))
 
   const todas = [...filas, ...extras].map((f) => ({
     ...f,
     label: f.label ?? ETIQUETAS[f.key] ?? f.key,
-    cumple: !d.metadatos_faltantes.includes(f.key) && f.valor != null,
+    cumple: !faltantes.includes(f.key) && f.valor != null,
   }))
 
-  const bloqueado = d.completos < d.obligatorios
+  const bloqueado =
+    (d.completos ?? 0) < (d.obligatorios ?? 10) || d.estado === 'certificado'
 
   const renderEditor = (f) => {
     const v = edit.value
@@ -276,29 +434,20 @@ export default function DetailCertify({ id }) {
         />
       ),
       clasificacion: (
-        <select
+        <Segmented
+          name="clasificacion"
+          ariaLabel="Clasificación"
+          options={clasifs.map((c) => ({ value: c.codigo, label: c.nombre }))}
           value={v ?? ''}
-          onChange={(e) => set(e.target.value)}
-          className="border border-gray-300 bg-white px-2 py-1 text-xs focus:outline-none focus:border-[#ea580c]"
-        >
-          <option value="">Selecciona...</option>
-          {clasifs.map((c) => (
-            <option key={c.codigo} value={c.codigo}>
-              {c.nombre}
-            </option>
-          ))}
-        </select>
+          onChange={set}
+        />
       ),
       sino: (
-        <select
-          value={v === true ? 'si' : v === false ? 'no' : ''}
-          onChange={(e) => set(e.target.value === 'si')}
-          className="border border-gray-300 bg-white px-2 py-1 text-xs focus:outline-none focus:border-[#ea580c]"
-        >
-          <option value="">Selecciona...</option>
-          <option value="si">Sí</option>
-          <option value="no">No</option>
-        </select>
+        <Toggle
+          label="¿Contiene datos personales?"
+          checked={v === true}
+          onChange={set}
+        />
       ),
     }[f.editor]
 
@@ -308,13 +457,19 @@ export default function DetailCertify({ id }) {
         {control}
         <div className="flex gap-2">
           <button
+            type="button"
             disabled={enviando || vacio}
             onClick={() => f.guardar(typeof v === 'string' ? v.trim() : v)}
             className={btn}
           >
-            Guardar
+            {enviando ? 'Guardando...' : 'Guardar'}
           </button>
-          <button onClick={() => setEdit(null)} className={btnSec}>
+          <button
+            type="button"
+            onClick={() => setEdit(null)}
+            disabled={enviando}
+            className={btnSec}
+          >
             Cancelar
           </button>
         </div>
@@ -325,29 +480,28 @@ export default function DetailCertify({ id }) {
   const valorInicial = (f) => {
     if (f.key === 'clasificacion') return d.clasificacion_codigo ?? ''
     if (f.key === 'contiene_datos_personales')
-      return d.contiene_datos_personales
+      return d.contiene_datos_personales ?? d.pii_sugerido_ia ?? false
     return f.valor ?? ''
   }
 
   return (
-    <div className="font-sans text-gray-900 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Certificar dataset</h1>
-
+    <div className="font-sans text-gray-950 w-full space-y-6">
       <div className="bg-white border border-gray-200 shadow-sm p-6 space-y-6">
         <div className="border-b border-gray-200 pb-4 flex items-center gap-3">
           <span className="font-mono text-xs font-bold text-gray-800">
             {d.nombre_tecnico}
           </span>
-          <span className="border border-gray-300 text-gray-600 px-1.5 py-0.5 text-[10px] uppercase">
+          <span className="border border-gray-300 text-gray-600 px-1.5 py-0.5 text-[10px] uppercase font-bold">
             {d.capa}
           </span>
           <span className="text-xs text-gray-500 capitalize">
-            {d.estado.replace('_', ' ')}
+            {(d.estado ?? '').replace('_', ' ')}
           </span>
         </div>
 
         <p className="text-xs font-semibold text-gray-700">
-          {d.completos} de {d.obligatorios} metadatos obligatorios completos
+          {d.completos ?? 0} de {d.obligatorios ?? 10} metadatos obligatorios
+          completos
         </p>
 
         <div className="divide-y divide-gray-100 border-y border-gray-100">
@@ -401,6 +555,7 @@ export default function DetailCertify({ id }) {
                     <>
                       {!f.cumple && f.usarIA && (
                         <button
+                          type="button"
                           disabled={enviando}
                           onClick={f.usarIA}
                           className={btn}
@@ -409,6 +564,7 @@ export default function DetailCertify({ id }) {
                         </button>
                       )}
                       <button
+                        type="button"
                         disabled={enviando}
                         onClick={() =>
                           setEdit({ key: f.key, value: valorInicial(f) })
@@ -421,7 +577,12 @@ export default function DetailCertify({ id }) {
                   )}
                   {f.columnas && (
                     <button
-                      onClick={() => setVerColumnas((x) => !x)}
+                      type="button"
+                      onClick={() =>
+                        verColumnas
+                          ? cancelarEvaluacion()
+                          : setVerColumnas(true)
+                      }
                       className={f.cumple ? btnSec : btn}
                     >
                       {verColumnas
@@ -438,89 +599,203 @@ export default function DetailCertify({ id }) {
         </div>
 
         {verColumnas && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-gray-800">Columnas</p>
-              <button disabled={enviando} onClick={aceptarIA} className={btn}>
-                Aceptar todas las sugerencias de la IA
+          <div ref={columnasRef} className="space-y-3 scroll-mt-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">
+                  Evaluar datos personales por columna
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  {d.nombre_tecnico} · {evaluadas} de {columnas.length}{' '}
+                  evaluadas
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={enviando}
+                onClick={aceptarIA}
+                className={`${btnSec} inline-flex items-center gap-1.5 shrink-0`}
+              >
+                <HiCheck className="w-3.5 h-3.5" />
+                Aceptar sugerencias de la IA
               </button>
             </div>
 
-            <div className="border border-gray-100 divide-y divide-gray-100">
-              {d.columnas.map((c) => (
-                <div
-                  key={c.id}
-                  className="p-3 flex items-start justify-between gap-4 text-xs"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p>
-                      <span className="font-mono font-bold">{c.nombre}</span>{' '}
-                      <span className="text-gray-400">{c.tipo_dato}</span>
-                    </p>
-                    <p className="text-[11px] text-gray-500 mt-0.5">
-                      {c.descripcion_ia}
-                    </p>
-                    <p className="text-[11px] text-gray-500 mt-1">
-                      Sugerencia IA:{' '}
-                      <span className="font-bold">
-                        {c.pii_sugerido_ia ? 'dato personal' : 'no personal'}
-                      </span>
-                    </p>
-                  </div>
+            <div className="border border-gray-200 overflow-x-auto">
+              <table className="w-full min-w-[840px] text-xs">
+                <thead>
+                  <tr className="bg-gray-50 text-left text-[10px] uppercase tracking-wider text-gray-500 border-b border-gray-200">
+                    <th scope="col" className="px-3 py-2.5 font-semibold">
+                      Columna
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 font-semibold">
+                      Tipo
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 font-semibold">
+                      Descripción
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 font-semibold">
+                      ¿Dato personal?
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 font-semibold">
+                      Categoría
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 font-semibold">
+                      Estado
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {columnas.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="px-3 py-4 text-gray-500 text-center"
+                      >
+                        Este dataset no tiene columnas registradas.
+                      </td>
+                    </tr>
+                  )}
+                  {columnas.map((c) => {
+                    const v = valorCol(c)
+                    const sinEvaluar = c.es_dato_personal == null
+                    const catSugerida =
+                      c.categoria_sugerida_ia ?? c.categoria_sugerida ?? null
+                    return (
+                      <tr
+                        key={c.id}
+                        className={sinEvaluar ? 'bg-[#ea580c]/5' : 'bg-white'}
+                      >
+                        <td className="px-3 py-3 font-mono font-bold text-gray-900 align-top">
+                          {c.nombre}
+                        </td>
+                        <td className="px-3 py-3 font-mono text-gray-500 align-top">
+                          {c.tipo_dato}
+                        </td>
+                        <td className="px-3 py-3 text-gray-600 align-top">
+                          {c.descripcion_ia ?? c.descripcion}
+                        </td>
+                        <td className="px-3 py-3 align-top">
+                          <Segmented
+                            compact
+                            name={`dp-${c.id}`}
+                            ariaLabel={`¿${c.nombre} es dato personal?`}
+                            disabled={enviando}
+                            options={[
+                              { value: true, label: 'Sí' },
+                              { value: false, label: 'No' },
+                            ]}
+                            value={v}
+                            onChange={(val) =>
+                              setEvals((p) => ({ ...p, [c.id]: val }))
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-3 align-top">
+                          {v === false ? (
+                            <span className="text-gray-400">—</span>
+                          ) : (
+                            <select
+                              aria-label={`Categoría de ${c.nombre}`}
+                              disabled={enviando || v == null}
+                              value={
+                                cats[c.id] ?? c.categoria_dato_personal ?? ''
+                              }
+                              onChange={(e) =>
+                                setCats((p) => ({
+                                  ...p,
+                                  [c.id]: e.target.value,
+                                }))
+                              }
+                              className="border border-gray-300 bg-white px-2 py-1.5 text-[11px] w-44 focus:outline-none focus:border-[#ea580c] disabled:bg-gray-50 disabled:text-gray-400"
+                            >
+                              <option value="">—</option>
+                              {categorias.map((k) => (
+                                <option key={k.codigo} value={k.codigo}>
+                                  {k.nombre}
+                                  {k.es_sensible ? ' · sensible' : ''}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 align-top">
+                          {sinEvaluar ? (
+                            <div className="space-y-1">
+                              <span className="inline-flex items-center gap-1 border border-amber-300 bg-amber-50 text-amber-800 px-2 py-0.5 text-[10px] font-semibold">
+                                <HiExclamation className="w-3 h-3" />
+                                Sin evaluar
+                              </span>
+                              {c.pii_sugerido_ia != null && (
+                                <p className="text-[10px] text-gray-500">
+                                  La IA sugiere:{' '}
+                                  <span className="font-bold">
+                                    {siNo(c.pii_sugerido_ia)}
+                                  </span>
+                                  {catSugerida
+                                    ? ` · ${nombreCategoria(catSugerida)}`
+                                    : ''}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 border border-gray-300 text-gray-700 px-2 py-0.5 text-[10px] font-semibold">
+                              <HiCheck className="w-3 h-3" />
+                              Evaluada
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <select
-                      value={cats[c.id] ?? c.categoria_dato_personal ?? ''}
-                      onChange={(e) =>
-                        setCats((p) => ({ ...p, [c.id]: e.target.value }))
-                      }
-                      className="border border-gray-300 bg-white px-1.5 py-1 text-[11px] w-44 focus:outline-none focus:border-[#ea580c]"
-                    >
-                      <option value="">Categoría (si es personal)</option>
-                      {d.categorias_dato_personal.map((k) => (
-                        <option key={k.codigo} value={k.codigo}>
-                          {k.nombre}
-                          {k.es_sensible ? ' · sensible' : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="flex gap-1.5">
-                      {[
-                        { v: true, t: 'Personal' },
-                        { v: false, t: 'No personal' },
-                      ].map(({ v, t }) => (
-                        <button
-                          key={t}
-                          disabled={enviando}
-                          onClick={() => evaluarColumna(c, v)}
-                          className={`border px-2 py-1 text-[11px] font-bold cursor-pointer disabled:opacity-50 ${
-                            c.es_dato_personal === v
-                              ? 'bg-black text-white border-black'
-                              : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                          }`}
-                        >
-                          {t}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={cancelarEvaluacion}
+                disabled={enviando}
+                className="text-xs font-semibold text-[#ea580c] hover:underline cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={guardarEvaluacion}
+                disabled={enviando || cambios.length === 0}
+                className={`${btn} py-2 px-4 text-xs`}
+              >
+                {enviando
+                  ? 'Guardando...'
+                  : `Guardar evaluación${
+                      cambios.length > 0 ? ` (${cambios.length})` : ''
+                    }`}
+              </button>
             </div>
           </div>
         )}
 
         {error && (
-          <p className="text-xs text-[#ea580c] border border-[#ea580c]/30 bg-[#ea580c]/5 px-3 py-2">
+          <p
+            ref={errorRef}
+            role="alert"
+            className="text-xs text-[#ea580c] border border-[#ea580c]/30 bg-[#ea580c]/5 px-3 py-2"
+          >
             {error}
           </p>
         )}
 
         <div className="space-y-2 pt-2">
-          <label className="block text-xs font-bold text-gray-800">
+          <label
+            htmlFor="comentario-pendiente"
+            className="block text-xs font-bold text-gray-800"
+          >
             Qué debe corregirse
           </label>
           <textarea
+            id="comentario-pendiente"
             rows={3}
             value={comentario}
             onChange={(e) => {
@@ -553,14 +828,19 @@ export default function DetailCertify({ id }) {
             }`}
           >
             <HiCheck className="w-4 h-4" />
-            <span>Certificar</span>
+            <span>
+              {d.estado === 'certificado'
+                ? 'Dataset certificado'
+                : 'Certificar'}
+            </span>
           </button>
         </div>
       </div>
 
       <p className="text-[11px] text-gray-400 mt-4">
         La certificación valida la ficha del catálogo, no la calidad de los
-        registros.
+        registros. Las columnas con datos personales determinan la clasificación
+        del dataset y quién debe aprobar los accesos.
       </p>
 
       {confirmar && (
@@ -573,10 +853,14 @@ export default function DetailCertify({ id }) {
               en la bitácora.
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirmar(false)} className={btnSec}>
+              <button
+                type="button"
+                onClick={() => setConfirmar(false)}
+                className={btnSec}
+              >
                 Cancelar
               </button>
-              <button onClick={certificar} className={btn}>
+              <button type="button" onClick={certificar} className={btn}>
                 Certificar
               </button>
             </div>

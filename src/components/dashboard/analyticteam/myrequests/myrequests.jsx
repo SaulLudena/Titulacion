@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { HiClock, HiCheckCircle, HiXCircle, HiPlus } from 'react-icons/hi'
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://banco-andino-backend.vercel.app'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
 export default function MyRequests({ requests = [], onNewRequest }) {
   const router = useRouter()

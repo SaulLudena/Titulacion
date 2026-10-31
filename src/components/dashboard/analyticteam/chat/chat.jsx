@@ -1,25 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import {
-  HiCheckCircle,
-  HiLockClosed,
   HiChevronDown,
   HiPaperAirplane,
   HiExclamation,
+  HiOutlinePlus,
 } from 'react-icons/hi'
 import { RiRobot2Fill } from 'react-icons/ri'
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://banco-andino-backend.vercel.app'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
 // ---------- Helpers ----------
-
-const normalize = (value) =>
-  String(value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '')
 
 const isPrimitive = (v) => typeof v === 'string' || typeof v === 'number'
 
@@ -60,12 +51,18 @@ const getToken = () => {
   return null
 }
 
+const authHeaders = () => {
+  const token = getToken()
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+}
+
 const normalizeDataset = (ds, index) => {
   if (!ds || typeof ds !== 'object') return null
 
   const id = ds.dataset_id ?? ds.id ?? null
-  const status = readText(ds.estado)
-  const classification = readText(ds.clasificacion)
 
   return {
     id,
@@ -75,8 +72,8 @@ const normalizeDataset = (ds, index) => {
       readText(ds.nombre) ||
       'Dataset sin nombre',
     code: readText(ds.nombre_tecnico),
-    status,
-    classification,
+    status: readText(ds.estado),
+    classification: readText(ds.clasificacion),
     domain: readText(ds.dominio),
     owner: readText(ds.responsable),
     capa: readText(ds.capa),
@@ -113,34 +110,161 @@ const errorMessageFor = (status) => {
   return 'Lo siento, ocurrió un error al procesar tu consulta con el servidor de IA. Por favor, intenta nuevamente.'
 }
 
+// ---------- Adaptadores del historial ----------
+// OJO: el formato exacto de GET /api/conversaciones y GET /api/conversaciones/{id}
+// no está en la colección de Postman. Estos adaptadores aceptan los nombres de
+// campo más probables; si el backend usa otros, solo hay que ajustar aquí.
+
+const asList = (data, keys) => {
+  if (Array.isArray(data)) return data
+  if (data && typeof data === 'object') {
+    for (const k of keys) if (Array.isArray(data[k])) return data[k]
+  }
+  return []
+}
+
+const conversationId = (c) => c?.conversacion_id ?? c?.id ?? null
+
+const conversationDate = (c) =>
+  Date.parse(
+    c?.actualizado_en ||
+      c?.ultima_actividad ||
+      c?.updated_at ||
+      c?.creado_en ||
+      c?.created_at ||
+      '',
+  ) || 0
+
+const storedSources = (m) => {
+  const src = m?.fuentes ?? m?.datasets ?? m?.ruta_fuentes ?? m?.metadata
+  if (Array.isArray(src)) return src.map(normalizeDataset).filter(Boolean)
+  if (src && typeof src === 'object') return extractDatasets(src)
+  return []
+}
+
+const isUserRole = (m) => {
+  const role = String(
+    m?.rol ?? m?.role ?? m?.autor ?? m?.emisor ?? m?.tipo ?? '',
+  ).toLowerCase()
+  return ['user', 'usuario', 'pregunta', 'human'].includes(role)
+}
+
+// Convierte un mensaje guardado en 0, 1 o 2 mensajes del front
+const toFrontMessages = (m, index) => {
+  const base = m?.id ?? m?.mensaje_id ?? `h-${index}`
+
+  // Caso A: un registro con pregunta y respuesta juntas
+  if (m?.pregunta && (m?.respuesta || m?.respuesta_texto)) {
+    return [
+      {
+        id: `${base}-q`,
+        sender: 'user',
+        text: String(m.pregunta),
+        initials: 'AT',
+      },
+      {
+        id: `${base}-a`,
+        sender: 'agent',
+        text: extractText(m),
+        datasets: storedSources(m),
+      },
+    ]
+  }
+
+  // Caso B: un registro por mensaje, con rol
+  const text =
+    readText(m?.contenido, ['texto', 'text']) ||
+    readText(m?.texto) ||
+    readText(m?.mensaje) ||
+    readText(m?.content, ['texto', 'text'])
+  if (!text) return []
+
+  return isUserRole(m)
+    ? [{ id: base, sender: 'user', text, initials: 'AT' }]
+    : [{ id: base, sender: 'agent', text, datasets: storedSources(m) }]
+}
+
 // ---------- Componente ----------
 
 export default function Chat() {
   const router = useRouter()
   const [inputValue, setInputValue] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingHistory, setLoadingHistory] = useState(true)
   const [openSources, setOpenSources] = useState({})
+  const [convId, setConvId] = useState(null)
   const messagesEndRef = useRef(null)
 
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      sender: 'agent',
-      text: '¡Hola! Soy el agente conversacional de Banco Andino. Pregúntame por cualquier dataset, dominio o métrica que necesites localizar.',
-      datasets: [],
-    },
-  ])
+  const [messages, setMessages] = useState([])
+
+  // Al entrar: abrir la conversación más reciente del usuario
+  useEffect(() => {
+    let cancelled = false
+
+    const loadLatestConversation = async () => {
+      try {
+        const listRes = await fetch(`${API_BASE_URL}/api/conversaciones`, {
+          headers: authHeaders(),
+        })
+        if (!listRes.ok) return
+
+        const conversations = asList(await listRes.json(), [
+          'conversaciones',
+          'items',
+          'data',
+        ])
+        if (conversations.length === 0) return
+
+        const latest = [...conversations].sort(
+          (a, b) => conversationDate(b) - conversationDate(a),
+        )[0]
+        const id = conversationId(latest)
+        if (!id) return
+
+        const detailRes = await fetch(
+          `${API_BASE_URL}/api/conversaciones/${id}`,
+          { headers: authHeaders() },
+        )
+        if (!detailRes.ok) return
+
+        const detail = await detailRes.json()
+        const stored = asList(detail, ['mensajes', 'messages', 'items', 'data'])
+        const restored = stored.flatMap(toFrontMessages)
+
+        if (!cancelled) {
+          setConvId(id)
+          setMessages(restored)
+        }
+      } catch (err) {
+        console.error('No se pudo cargar el historial del chat:', err)
+      } finally {
+        if (!cancelled) setLoadingHistory(false)
+      }
+    }
+
+    loadLatestConversation()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
+  }, [messages, loading, loadingHistory])
 
   const toggleSources = (messageId) =>
     setOpenSources((prev) => ({ ...prev, [messageId]: !prev[messageId] }))
 
+  const handleNewConversation = () => {
+    if (loading) return
+    setConvId(null)
+    setMessages([])
+    setOpenSources({})
+  }
+
   const handleSendMessage = async (e) => {
     e?.preventDefault()
-    if (!inputValue.trim() || loading) return
+    if (!inputValue.trim() || loading || loadingHistory) return
 
     const questionText = inputValue.trim()
     setInputValue('')
@@ -152,18 +276,13 @@ export default function Chat() {
     setLoading(true)
 
     try {
-      const token = getToken()
-      if (!token) {
-        console.warn('No se encontró token en localStorage/sessionStorage.')
-      }
-
       const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ pregunta: questionText }),
+        headers: authHeaders(),
+        body: JSON.stringify({
+          pregunta: questionText,
+          ...(convId ? { conversacion_id: convId } : {}),
+        }),
       })
 
       if (!response.ok) {
@@ -174,6 +293,10 @@ export default function Chat() {
       }
 
       const data = await response.json()
+
+      // Guardar el id para que los siguientes mensajes continúen la conversación
+      const returnedId = data?.conversacion_id ?? data?.conversacion?.id
+      if (returnedId) setConvId(returnedId)
 
       setMessages((prev) => [
         ...prev,
@@ -202,20 +325,22 @@ export default function Chat() {
   }
 
   return (
-    <div className="space-y-6 font-sans">
+    // Alto = pantalla completa menos el padding vertical de la página (p-8 = 4rem).
+    // Si tu layout usa otro padding, ajusta el 4rem.
+    <div className="flex flex-col h-[calc(100vh-4rem)] min-h-[580px] gap-6 font-sans">
       <div>
         <h1 className="text-xl font-bold text-gray-900 tracking-tight">
-          Agente conversacional
+          ChatBot de Descubrimiento
         </h1>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-none flex flex-col justify-between shadow-sm min-h-[580px]">
+      <div className="bg-white border border-gray-200 rounded-none flex flex-col shadow-sm flex-1 min-h-0">
         {/* Cabecera del agente */}
         <div className="p-4 border-b border-gray-100 flex items-center gap-3 bg-white">
           <div className="w-9 h-9 bg-[#ea580c] flex items-center justify-center rounded-none text-white text-lg">
             <RiRobot2Fill />
           </div>
-          <div>
+          <div className="flex-1">
             <h2 className="text-sm font-bold text-gray-900 leading-tight">
               Agente de descubrimiento
             </h2>
@@ -223,10 +348,23 @@ export default function Chat() {
               Responde solo con metadatos y cita sus fuentes
             </p>
           </div>
+          <button
+            type="button"
+            onClick={handleNewConversation}
+            disabled={loading || messages.length === 0}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-50 rounded-none transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <HiOutlinePlus className="w-3.5 h-3.5" />
+            Nueva conversación
+          </button>
         </div>
 
         {/* Conversación */}
-        <div className="p-6 space-y-6 flex-1 overflow-y-auto bg-white max-h-[520px]">
+        <div className="p-6 space-y-6 flex-1 min-h-0 overflow-y-auto bg-white">
+          {loadingHistory && (
+            <p className="text-xs text-gray-500">Cargando conversación...</p>
+          )}
+
           {messages.map((msg) => (
             <React.Fragment key={msg.id}>
               {msg.sender === 'user' ? (
@@ -282,7 +420,6 @@ export default function Chat() {
                           </button>
                         </div>
 
-                        {/* Advertencias y detalles */}
                         {ds.advertencias?.length > 0 && (
                           <div className="flex flex-wrap gap-1 pt-1">
                             {ds.advertencias.map((adv, idx) => (
@@ -379,7 +516,7 @@ export default function Chat() {
             />
             <button
               type="submit"
-              disabled={loading || !inputValue.trim()}
+              disabled={loading || loadingHistory || !inputValue.trim()}
               className="px-5 py-2.5 bg-[#ea580c] hover:bg-[#d94e09] text-white text-xs font-semibold rounded-none shadow-sm transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
             >
               <span>{loading ? 'Enviando...' : 'Enviar'}</span>

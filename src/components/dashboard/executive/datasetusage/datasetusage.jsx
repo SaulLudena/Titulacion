@@ -75,7 +75,6 @@ export default function DatasetUsage() {
   const [descargando, setDescargando] = useState(false)
   const [error, setError] = useState(null)
 
-  // Consulta el reporte con un rango dado (vacío = 365 días del backend)
   const consultar = useCallback(async (d, h) => {
     try {
       setCargando(true)
@@ -91,7 +90,6 @@ export default function DatasetUsage() {
     }
   }, [])
 
-  // carga inicial con el mes actual
   useEffect(() => {
     consultar(INICIO_MES, FIN_MES)
   }, [consultar])
@@ -191,8 +189,8 @@ export default function DatasetUsage() {
     }`
 
   return (
-    <div className="font-sans text-gray-900 max-w-7xl">
-      <div className="mb-6">
+    <div className="font-sans text-gray-900 w-full space-y-6">
+      <div className="w-full">
         <h1 className="text-2xl font-bold text-gray-900">Uso de datasets</h1>
         <p className="text-xs text-gray-500 mt-1">
           Datasets ordenados por consultas en el catálogo y con el agente. No
@@ -201,8 +199,8 @@ export default function DatasetUsage() {
       </div>
 
       {/* Periodo y acciones */}
-      <div className="bg-white border border-gray-200 shadow-sm p-6 mb-6">
-        <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-4">
+      <div className="bg-white border border-gray-200 shadow-sm p-6 w-full">
+        <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-4 w-full">
           <div>
             <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-2">
               Periodo
@@ -266,7 +264,7 @@ export default function DatasetUsage() {
 
       {/* Resumen */}
       {!cargando && datos.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
           {[
             { t: 'Datasets', v: datos.length },
             { t: 'Sobreutilizados', v: resumen.sobre },
@@ -275,7 +273,7 @@ export default function DatasetUsage() {
           ].map((c) => (
             <div
               key={c.t}
-              className="bg-white border border-gray-200 shadow-sm px-4 py-3"
+              className="bg-white border border-gray-200 shadow-sm px-4 py-3 w-full"
             >
               <p className="text-[11px] uppercase tracking-wider text-gray-500 font-medium">
                 {c.t}
@@ -287,7 +285,7 @@ export default function DatasetUsage() {
       )}
 
       {/* Filtros de la tabla */}
-      <div className="flex flex-wrap gap-3 mb-4">
+      <div className="flex flex-wrap gap-3 w-full">
         <input
           value={q}
           onChange={cambiar(setQ)}
@@ -319,13 +317,13 @@ export default function DatasetUsage() {
       </div>
 
       {error && (
-        <p className="text-xs text-[#ea580c] border border-[#ea580c]/30 bg-[#ea580c]/5 px-3 py-2 mb-4">
+        <p className="text-xs text-[#ea580c] border border-[#ea580c]/30 bg-[#ea580c]/5 px-3 py-2 w-full">
           {error}
         </p>
       )}
 
       {/* Tabla */}
-      <div className="bg-white border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white border border-gray-200 shadow-sm overflow-hidden w-full">
         {cargando && <p className="p-6 text-xs text-gray-500">Cargando...</p>}
 
         {!cargando && filtrados.length === 0 && (
@@ -335,7 +333,7 @@ export default function DatasetUsage() {
         )}
 
         {!cargando && filtrados.length > 0 && (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto w-full">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="border-b border-gray-200 text-gray-400 uppercase tracking-wider font-semibold bg-gray-50/50">
@@ -408,7 +406,7 @@ export default function DatasetUsage() {
         )}
 
         {!cargando && filtrados.length > 0 && (
-          <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 text-xs text-gray-600">
+          <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 text-xs text-gray-600 w-full">
             <span>
               Mostrando {inicio + 1}-
               {Math.min(inicio + POR_PAGINA, filtrados.length)} de{' '}

@@ -2,28 +2,25 @@ import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import Link from 'next/link'
 import {
-  HiDatabase,
-  HiChatAlt2,
-  HiChartBar,
-  HiDocumentReport,
-  HiShieldCheck,
-  HiClipboardList,
-  HiFolder,
-  HiLogout,
-  HiUser,
-  HiClock,
+  HiOutlineViewGrid,
+  HiOutlineChip,
+  HiOutlineInbox,
+  HiOutlineChartBar,
+  HiOutlineDocumentReport,
+  HiOutlineShieldCheck,
+  HiOutlineClipboardList,
+  HiOutlineFolder,
+  HiOutlineDatabase,
+  HiOutlineClock,
+  HiOutlineLogout,
 } from 'react-icons/hi'
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://banco-andino-backend.vercel.app'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
 export default function Sidebar({ role: customRole }) {
   const router = useRouter()
   const [currentRole, setCurrentRole] = useState('analista')
-  const [user, setUser] = useState({
-    nombre: 'Cargando...',
-    correo: '...',
-  })
+  const [user, setUser] = useState({ nombre: 'Cargando...' })
 
   // Normalizar la cadena de rol
   const normalizeRole = (r) => {
@@ -63,7 +60,6 @@ export default function Sidebar({ role: customRole }) {
               data.full_name ||
               data.email?.split('@')[0] ||
               'Usuario',
-            correo: data.correo || data.email || '',
           })
 
           const fetchedRole = normalizeRole(data.rol || data.role)
@@ -96,12 +92,21 @@ export default function Sidebar({ role: customRole }) {
     }
   }, [router.asPath, router.pathname, customRole])
 
-  // Etiquetas para la cabecera
+  // Rol del usuario que se muestra en el pie del sidebar
   const roleLabels = {
-    analista: 'Analítica de Datos',
-    ejecutivo: 'Ejecutivo / Gerencia',
-    cumplimiento: 'Oficialía de Cumplimiento',
+    analista: 'Analista',
+    ejecutivo: 'Ejecutivo',
+    cumplimiento: 'Oficial de Cumplimiento',
   }
+
+  // Iniciales para el avatar (máximo 2 letras)
+  const initials =
+    user.nombre
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0].toUpperCase())
+      .join('') || 'U'
 
   // Configuración de menús por rol
   const menuConfig = {
@@ -113,12 +118,12 @@ export default function Sidebar({ role: customRole }) {
             {
               name: 'Catálogo',
               path: '/dashboard/analyticteam',
-              icon: HiDatabase,
+              icon: HiOutlineViewGrid,
             },
             {
-              name: 'Agente Conversacional',
+              name: 'ChatBot de Descubrimiento',
               path: '/dashboard/analyticteam/chat',
-              icon: HiChatAlt2,
+              icon: HiOutlineChip,
             },
           ],
         },
@@ -128,7 +133,7 @@ export default function Sidebar({ role: customRole }) {
             {
               name: 'Mis solicitudes',
               path: '/dashboard/analyticteam/myrequestspage',
-              icon: HiFolder,
+              icon: HiOutlineInbox,
             },
           ],
         },
@@ -137,42 +142,42 @@ export default function Sidebar({ role: customRole }) {
     ejecutivo: {
       sections: [
         {
-          title: 'ACCESOS Y GOBIERNO',
+          title: 'Accesos y gobierno',
           items: [
             {
               name: 'Por aprobar',
               path: '/dashboard/executive',
-              icon: HiFolder,
+              icon: HiOutlineFolder,
             },
             {
               name: 'Certificar dataset',
               path: '/dashboard/executive/certifydataset',
-              icon: HiShieldCheck,
+              icon: HiOutlineShieldCheck,
             },
             {
               name: 'Nuevo proceso core',
               path: '/dashboard/executive/newcoreprocess',
-              icon: HiClipboardList,
+              icon: HiOutlineClipboardList,
             },
           ],
         },
         {
-          title: 'SEGUIMIENTO',
+          title: 'Seguimiento',
           items: [
             {
               name: 'Indicadores',
               path: '/dashboard/executive/indicators',
-              icon: HiChartBar,
+              icon: HiOutlineChartBar,
             },
             {
               name: 'Uso de datasets',
               path: '/dashboard/executive/datasetusage',
-              icon: HiDocumentReport,
+              icon: HiOutlineDocumentReport,
             },
             {
               name: 'Bitácora',
               path: '/dashboard/executive/binnacle',
-              icon: HiDatabase,
+              icon: HiOutlineDatabase,
             },
           ],
         },
@@ -181,17 +186,17 @@ export default function Sidebar({ role: customRole }) {
     cumplimiento: {
       sections: [
         {
-          title: 'CUMPLIMIENTO',
+          title: 'Cumplimiento',
           items: [
             {
               name: 'Segunda aprobación',
               path: '/dashboard/complianceoffice',
-              icon: HiShieldCheck,
+              icon: HiOutlineShieldCheck,
             },
             {
               name: 'Bitácora',
-              path: '/dashboard/complianceoffice/audit-log',
-              icon: HiClock,
+              path: '/dashboard/complianceoffice/binnacle',
+              icon: HiOutlineClock,
             },
           ],
         },
@@ -220,28 +225,28 @@ export default function Sidebar({ role: customRole }) {
   }
 
   return (
-    <aside className="w-64 h-screen bg-white text-gray-900 flex flex-col justify-between border-r border-gray-200 p-6 font-sans rounded-none shrink-0">
+    <aside className="w-64 h-screen bg-[#0a0a0a] text-white flex flex-col justify-between p-5 font-sans rounded-none shrink-0">
       <div>
-        {/* Cabecera del Banco */}
+        {/* Cabecera */}
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-8 h-8 bg-[#ea580c] flex items-center justify-center rounded-none shadow-sm">
-            <span className="text-white font-bold text-sm">B</span>
+          <div className="w-8 h-8 bg-[#ea580c] flex items-center justify-center rounded-none">
+            <HiOutlineChartBar className="w-4 h-4 text-white" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold leading-none text-gray-900">
-              Banco Andino
+            <h2 className="text-sm font-semibold leading-none text-white">
+              Catálogo de Datos
             </h2>
-            <p className="text-gray-500 text-[10px] mt-1 uppercase tracking-wider font-medium">
-              {roleLabels[currentRole]}
+            <p className="text-gray-400 text-[11px] mt-1">
+              Banco Andino S.A.C.
             </p>
           </div>
         </div>
 
-        {/* Secciones del Menú */}
+        {/* Secciones del menú */}
         <div className="space-y-6">
           {currentConfig.sections.map((section, idx) => (
             <div key={idx} className="space-y-1.5">
-              <h3 className="px-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+              <h3 className="px-3 text-[10px] font-semibold text-gray-500 uppercase tracking-[0.15em]">
                 {section.title}
               </h3>
               <nav className="space-y-1">
@@ -253,10 +258,11 @@ export default function Sidebar({ role: customRole }) {
                     <Link
                       key={item.path}
                       href={item.path}
-                      className={`flex items-center gap-3 px-3.5 py-2.5 rounded-none text-xs font-medium transition-colors ${
+                      aria-current={isActive ? 'page' : undefined}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-none text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-white ${
                         isActive
-                          ? 'bg-[#ea580c] text-white font-semibold shadow-sm'
-                          : 'text-gray-600 hover:bg-[#ea580c]/10 hover:text-[#ea580c]'
+                          ? 'bg-[#ea580c] text-white font-semibold'
+                          : 'text-gray-300 hover:bg-white/10 hover:text-white'
                       }`}
                     >
                       <IconComponent className="w-4 h-4 shrink-0" />
@@ -270,27 +276,33 @@ export default function Sidebar({ role: customRole }) {
         </div>
       </div>
 
-      {/* Bloque de Perfil de Usuario Real y Logout */}
-      <div className="pt-4 border-t border-gray-200 space-y-3">
-        <div className="flex items-center gap-3 px-2 py-1.5 bg-gray-50 border border-gray-100 rounded-none">
-          <div className="w-7 h-7 bg-gray-200 text-gray-700 flex items-center justify-center rounded-none shrink-0 font-bold text-xs">
-            <HiUser className="w-4 h-4" />
+      {/* Pie: usuario, rol y cierre de sesión */}
+      <div className="pt-4 border-t border-white/15">
+        <div className="flex items-center gap-3">
+          <div
+            className="w-8 h-8 bg-[#ea580c] text-white flex items-center justify-center rounded-full shrink-0 font-semibold text-[11px]"
+            aria-hidden="true"
+          >
+            {initials}
           </div>
-          <div className="overflow-hidden">
-            <p className="text-xs font-semibold text-gray-900 truncate">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-white leading-tight">
               {user.nombre}
             </p>
-            <p className="text-[10px] text-gray-500 truncate">{user.correo}</p>
+            <p className="text-[11px] text-gray-400 truncate">
+              {roleLabels[currentRole]}
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            aria-label="Cerrar sesión"
+            title="Cerrar sesión"
+            className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-none transition-colors cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+          >
+            <HiOutlineLogout className="w-4 h-4" />
+          </button>
         </div>
-
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-none transition-colors cursor-pointer font-medium"
-        >
-          <HiLogout className="w-4 h-4 shrink-0" />
-          <span>Cerrar sesión</span>
-        </button>
       </div>
     </aside>
   )

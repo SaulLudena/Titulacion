@@ -2,10 +2,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/router'
 import CatalogItem from './catalogitem'
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://banco-andino-backend.vercel.app'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
 const PAGE_SIZE = 6
+
+// Clave donde se guardan búsqueda y filtros del catálogo
+const STORAGE_KEY = 'catalog:filters'
 
 const DOMINIOS = [
   'Clientes',
@@ -42,6 +44,98 @@ const getToken = () =>
   typeof window !== 'undefined'
     ? localStorage.getItem('token') || sessionStorage.getItem('token')
     : null
+
+const CATALOG_PAGE_SIZE = 100 // tamaño pedido por página; el backend puede recortarlo
+
+const fetchCatalogPage = ({ q, pagina, tamano, token }) => {
+  const params = new URLSearchParams()
+  if (q) params.append('q', q)
+  params.append('pagina', String(pagina))
+  if (tamano) params.append('tamano', String(tamano))
+
+  return fetch(`${API_BASE_URL}/api/catalogo?${params.toString()}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+}
+
+const listFrom = (data) =>
+  Array.isArray(data) ? data : data.datasets || data.items || []
+
+// Trae TODAS las páginas del catálogo y las junta en una sola lista.
+// El backend responde { total, pagina, tamano, datasets } y entrega una página
+// a la vez, así que hay que pedir las siguientes hasta cubrir el total.
+const fetchAllDatasets = async (q, token) => {
+  // Primera página con tamaño grande; si el backend lo rechaza, usa el por defecto
+  let res = await fetchCatalogPage({
+    q,
+    pagina: 1,
+    tamano: CATALOG_PAGE_SIZE,
+    token,
+  })
+  if (!res.ok && (res.status === 400 || res.status === 422)) {
+    res = await fetchCatalogPage({ q, pagina: 1, token })
+  }
+  if (!res.ok) throw new Error('No se pudo obtener el catálogo de datasets.')
+
+  const first = await res.json()
+  const items = [...listFrom(first)]
+  if (Array.isArray(first)) return items
+
+  const total = Number(first.total) || items.length
+  const size = Number(first.tamano) || items.length || 1
+  const totalPages = Math.min(Math.ceil(total / size), 50) // tope de seguridad
+
+  if (totalPages > 1) {
+    const rest = await Promise.all(
+      Array.from({ length: totalPages - 1 }, (_, i) =>
+        fetchCatalogPage({ q, pagina: i + 2, tamano: size, token }).then(
+          (r) => {
+            if (!r.ok)
+              throw new Error('No se pudo obtener el catálogo de datasets.')
+            return r.json()
+          },
+        ),
+      ),
+    )
+    rest.forEach((d) => items.push(...listFrom(d)))
+  }
+
+  // Quitar duplicados por id, por si el backend repite alguno entre páginas
+  const seen = new Set()
+  return items.filter((it) => {
+    const id = it.id || it.dataset_id
+    if (!id) return true
+    if (seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
+}
+
+// Lee los filtros guardados. Si algo falla o no es válido, devuelve vacíos.
+// Las opciones se validan contra las listas actuales para no dejar un filtro
+// "fantasma" que deje el catálogo sin resultados.
+const readSavedFilters = () => {
+  const empty = { searchTerm: '', dominio: '', clasificacion: '', estado: '' }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return empty
+    const saved = JSON.parse(raw)
+    return {
+      searchTerm: typeof saved.searchTerm === 'string' ? saved.searchTerm : '',
+      dominio: DOMINIOS.includes(saved.dominio) ? saved.dominio : '',
+      clasificacion: CLASIFICACIONES.includes(saved.clasificacion)
+        ? saved.clasificacion
+        : '',
+      estado: ESTADOS.includes(saved.estado) ? saved.estado : '',
+    }
+  } catch (e) {
+    return empty
+  }
+}
 
 // Genera la lista de páginas con elipsis: [1, '...', 4, 5, 6, '...', 12]
 const buildPageList = (current, total) => {
@@ -167,6 +261,46 @@ export default function Catalog() {
   // Paginación
   const [page, setPage] = useState(1)
 
+  // Indica que ya se leyeron los filtros guardados. Hasta entonces no se guarda
+  // ni se consulta nada, para no pisar lo guardado con los valores vacíos
+  // iniciales ni hacer una primera consulta sin el texto de búsqueda.
+  const [filtersLoaded, setFiltersLoaded] = useState(false)
+
+  // Restaurar búsqueda y filtros al montar (en useEffect porque en Next.js
+  // localStorage no existe durante el render del servidor)
+  useEffect(() => {
+    const saved = readSavedFilters()
+    setSearchTerm(saved.searchTerm)
+    setSelectedDominio(saved.dominio)
+    setSelectedClasificacion(saved.clasificacion)
+    setSelectedEstado(saved.estado)
+    setFiltersLoaded(true)
+  }, [])
+
+  // Guardar búsqueda y filtros cada vez que cambian
+  useEffect(() => {
+    if (!filtersLoaded) return
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          searchTerm,
+          dominio: selectedDominio,
+          clasificacion: selectedClasificacion,
+          estado: selectedEstado,
+        }),
+      )
+    } catch (e) {
+      /* almacenamiento lleno o bloqueado: se ignora */
+    }
+  }, [
+    filtersLoaded,
+    searchTerm,
+    selectedDominio,
+    selectedClasificacion,
+    selectedEstado,
+  ])
+
   // Carga desde el backend. Solo se envía la búsqueda de texto (q);
   // los filtros laterales se aplican en el cliente para que funcionen siempre,
   // sin depender de cómo el backend formatee dominio/clasificación/estado.
@@ -177,28 +311,7 @@ export default function Catalog() {
     const token = getToken()
 
     try {
-      const params = new URLSearchParams()
-      if (searchTerm.trim()) params.append('q', searchTerm.trim())
-
-      const response = await fetch(
-        `${API_BASE_URL}/api/catalogo?${params.toString()}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        },
-      )
-
-      if (!response.ok) {
-        throw new Error('No se pudo obtener el catálogo de datasets.')
-      }
-
-      const data = await response.json()
-      const rawList = Array.isArray(data)
-        ? data
-        : data.datasets || data.items || []
+      const rawList = await fetchAllDatasets(searchTerm.trim(), token)
 
       // Para ver qué trae el listado, descomenta:
       // console.log('Primer item del listado:', rawList[0])
@@ -283,13 +396,15 @@ export default function Catalog() {
     }
   }
 
-  // Búsqueda con debounce: solo depende del texto, no de los filtros
+  // Búsqueda con debounce: solo depende del texto, no de los filtros.
+  // Espera a que se hayan restaurado los filtros guardados.
   useEffect(() => {
+    if (!filtersLoaded) return
     const timer = setTimeout(() => {
       fetchDatasetsFromBackend()
     }, 300)
     return () => clearTimeout(timer)
-  }, [searchTerm])
+  }, [filtersLoaded, searchTerm])
 
   // Al cambiar búsqueda o cualquier filtro, volver a la primera página
   useEffect(() => {

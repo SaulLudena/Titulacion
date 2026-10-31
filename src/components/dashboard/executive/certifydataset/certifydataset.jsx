@@ -1,16 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { HiChevronRight, HiChevronLeft } from 'react-icons/hi'
-import { apiFetch } from '@/src/lib/api'
+import { apiFetch } from '../../../../libs/api'
 
 const POR_PAGINA = 15
 
 const ESTADOS = [
+  { value: 'todos', label: 'Todos los estados' },
   { value: 'por_revisar', label: 'Por revisar' },
   { value: 'borrador', label: 'Borrador' },
   { value: 'en_revision', label: 'En revisión' },
   { value: 'certificado', label: 'Certificados' },
-  { value: 'todos', label: 'Todos' },
 ]
 const CAPAS = ['todas', 'bronce', 'plata', 'oro']
 
@@ -21,30 +21,74 @@ export default function CertifyDataset() {
 
   const [q, setQ] = useState('')
   const [capa, setCapa] = useState('todas')
-  const [estado, setEstado] = useState('por_revisar')
+  const [estado, setEstado] = useState('todos') // Cambiado a 'todos' por defecto para evitar listas vacías
+  const [ownerSeleccionado, setOwnerSeleccionado] = useState('todos')
   const [pagina, setPagina] = useState(1)
 
   useEffect(() => {
     apiFetch('/api/certificacion')
-      .then(setDatasets)
+      .then((res) => {
+        // Asegurarnos de capturar el array ya sea directo o dentro de una propiedad
+        const dataList = Array.isArray(res)
+          ? res
+          : res.datasets || res.data || []
+        setDatasets(dataList)
+      })
       .catch((e) => setError(e.message))
       .finally(() => setCargando(false))
   }, [])
+
+  // Extraer dinámicamente la lista única de Data Owners de forma flexible
+  const ownersDisponibles = useMemo(() => {
+    const setOwners = new Set()
+    datasets.forEach((d) => {
+      const ownerName =
+        d.owner ||
+        d.responsable ||
+        d.data_owner ||
+        d.owner_nombre ||
+        d.data_owner_nombre ||
+        d.responsable_nombre
+      if (ownerName) setOwners.add(ownerName)
+    })
+    return Array.from(setOwners).sort()
+  }, [datasets])
 
   const filtrados = useMemo(() => {
     const texto = q.trim().toLowerCase()
     return datasets
       .filter((d) => {
-        if (texto && !d.dataset.toLowerCase().includes(texto)) return false
+        const nombreDataset = d.dataset || d.nombre || d.nombre_tecnico || ''
+        if (texto && !nombreDataset.toLowerCase().includes(texto)) return false
         if (capa !== 'todas' && d.capa !== capa) return false
-        if (estado === 'por_revisar') return d.estado !== 'certificado'
-        if (estado !== 'todos') return d.estado === estado
+
+        // Filtro por Data Owner
+        if (ownerSeleccionado !== 'todos') {
+          const ownerDataset =
+            d.owner ||
+            d.responsable ||
+            d.data_owner ||
+            d.owner_nombre ||
+            d.data_owner_nombre ||
+            d.responsable_nombre
+          if (ownerDataset !== ownerSeleccionado) return false
+        }
+
+        // Filtro por Estado
+        if (estado === 'por_revisar') {
+          if (d.estado === 'certificado') return false
+        } else if (estado !== 'todos') {
+          if (d.estado !== estado) return false
+        }
+
         return true
       })
       .sort(
-        (a, b) => a.cantidad - b.cantidad || a.dataset.localeCompare(b.dataset),
+        (a, b) =>
+          (a.cantidad || 0) - (b.cantidad || 0) ||
+          (a.dataset || '').localeCompare(b.dataset || ''),
       )
-  }, [datasets, q, capa, estado])
+  }, [datasets, q, capa, estado, ownerSeleccionado])
 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA))
   const paginaActual = Math.min(pagina, totalPaginas)
@@ -62,12 +106,13 @@ export default function CertifyDataset() {
         Certificar dataset
       </h1>
 
+      {/* Contenedor de Filtros */}
       <div className="flex flex-wrap gap-3 mb-4">
         <input
           value={q}
           onChange={cambiar(setQ)}
           placeholder="Buscar dataset..."
-          className="border border-gray-200 bg-white px-3 py-2 text-xs w-64 focus:outline-none focus:border-[#ea580c]"
+          className="border border-gray-200 bg-white px-3 py-2 text-xs w-60 focus:outline-none focus:border-[#ea580c]"
         />
         <select
           value={capa}
@@ -91,6 +136,20 @@ export default function CertifyDataset() {
             </option>
           ))}
         </select>
+
+        {/* Combo box para seleccionar el Data Owner */}
+        <select
+          value={ownerSeleccionado}
+          onChange={cambiar(setOwnerSeleccionado)}
+          className="border border-gray-200 bg-white px-3 py-2 text-xs focus:outline-none focus:border-[#ea580c]"
+        >
+          <option value="todos">Todos los Data Owners</option>
+          {ownersDisponibles.map((owner) => (
+            <option key={owner} value={owner}>
+              {owner}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="bg-white border border-gray-200 shadow-sm">
@@ -110,30 +169,30 @@ export default function CertifyDataset() {
 
         <ul className="divide-y divide-gray-100">
           {visibles.map((d) => (
-            <li key={d.dataset_id}>
+            <li key={d.dataset_id || d.id}>
               <Link
-                href={`/dashboard/executive/certifydataset/${d.dataset_id}`}
+                href={`/dashboard/executive/certifydataset/${d.dataset_id || d.id}`}
                 className="flex items-center justify-between px-6 py-3.5 text-xs hover:bg-gray-50 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <span className="font-mono font-bold text-gray-900">
-                    {d.dataset}
+                    {d.dataset || d.nombre}
                   </span>
                   <span className="border border-gray-300 text-gray-600 px-1.5 py-0.5 text-[10px] uppercase">
-                    {d.capa}
+                    {d.capa || 'General'}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-4">
                   <span className="text-gray-500 capitalize">
-                    {d.estado.replace('_', ' ')}
+                    {(d.estado || 'pendiente').replace('_', ' ')}
                   </span>
                   {d.estado === 'certificado' ? (
                     <span className="text-gray-400">Completo</span>
                   ) : (
                     <span className="text-[#ea580c] font-semibold">
-                      {d.cantidad}{' '}
-                      {d.cantidad === 1 ? 'pendiente' : 'pendientes'}
+                      {d.cantidad || 0}{' '}
+                      {(d.cantidad || 0) === 1 ? 'pendiente' : 'pendientes'}
                     </span>
                   )}
                   <HiChevronRight className="w-4 h-4 text-gray-400" />

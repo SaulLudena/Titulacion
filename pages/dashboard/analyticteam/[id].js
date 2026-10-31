@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import Viewfile from '@/src/components/dashboard/analyticteam/catalog/viewFile'
 import AnalyticTeamLayout from '@/src/components/dashboard/analyticteam/analyticteamlayout'
+import Head from 'next/head'
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://banco-andino-backend.vercel.app'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
 // Etiquetas legibles para el estado del dataset
 const ESTADOS_LABEL = {
@@ -154,28 +154,40 @@ export default function Viewfilepage() {
   }, [id])
 
   return (
-    <AnalyticTeamLayout>
-      <div className="space-y-6">
-        {loading ? (
-          <div className="bg-white border border-gray-200 p-12 text-center text-xs text-gray-500">
-            Cargando detalles del dataset desde el servidor...
-          </div>
-        ) : error || !datasetData ? (
-          <div className="bg-red-50 border border-red-200 p-6 text-xs text-red-600 text-center">
-            {error || 'No se encontró información para este dataset.'}
-          </div>
-        ) : (
-          <Viewfile
-            dataset={datasetData}
-            onBack={() => router.push('/dashboard/analyticteam')}
-            onRequestAccess={() =>
-              router.push(
-                `/dashboard/analyticteam/newrequest?dataset_id=${datasetData.id || datasetData.dataset_id}`,
-              )
-            }
-          />
-        )}
-      </div>
-    </AnalyticTeamLayout>
+    <>
+      <Head>
+        <title>Banco Andino | Ficha Dataset</title>
+        <meta
+          name="description"
+          content="Login Banco Andino, catalogo de data de la empresa"
+        />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#0a0a0a" />
+        <link rel="icon" href="/favicon.png" type="image/svg+xml" />
+      </Head>
+      <AnalyticTeamLayout>
+        <div className="space-y-6">
+          {loading ? (
+            <div className="bg-white border border-gray-200 p-12 text-center text-xs text-gray-500">
+              Cargando detalles del dataset desde el servidor...
+            </div>
+          ) : error || !datasetData ? (
+            <div className="bg-red-50 border border-red-200 p-6 text-xs text-red-600 text-center">
+              {error || 'No se encontró información para este dataset.'}
+            </div>
+          ) : (
+            <Viewfile
+              dataset={datasetData}
+              onBack={() => router.push('/dashboard/analyticteam')}
+              onRequestAccess={() =>
+                router.push(
+                  `/dashboard/analyticteam/newrequest?dataset_id=${datasetData.id || datasetData.dataset_id}`,
+                )
+              }
+            />
+          )}
+        </div>
+      </AnalyticTeamLayout>
+    </>
   )
 }

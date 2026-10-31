@@ -1,11 +1,12 @@
 import { useRouter } from 'next/router'
 import { useState } from 'react'
+import { HiOutlineChartBar } from 'react-icons/hi'
 
 const SUPABASE_TOKEN_URL = process.env.NEXT_PUBLIC_SUPABASE_TOKEN_URL
 const SUPABASE_PUBLISHABLE_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://banco-andino-backend.vercel.app'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
+
 // Mapeo de roles (los que devuelve el backend) a rutas
 const roleRoutes = {
   analista: '/dashboard/analyticteam',
@@ -21,6 +22,17 @@ const seedUsers = [
   { label: 'Jorge (Cumplimiento)', email: 'jorge.cerdan@bancoandino.pe' },
 ]
 
+// Barras decorativas del panel izquierdo
+const heroBars = [
+  { height: '15%', color: '#7c2d12' },
+  { height: '24%', color: '#9a3412' },
+  { height: '32%', color: '#c2410c' },
+  { height: '46%', color: '#ea580c' },
+  { height: '36%', color: '#fb923c' },
+  { height: '26%', color: '#fdba74' },
+  { height: '16%', color: '#fed7aa' },
+]
+
 export default function Login() {
   const router = useRouter()
 
@@ -32,14 +44,19 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // Lógica única de login: la usan el formulario y los botones semilla.
-  // El destino sale SOLO del rol que devuelve /api/me. Si algo falla, se muestra error.
+  // Lógica unificada de login
   const login = async (loginEmail, loginPassword) => {
     setLoading(true)
     setError(null)
 
     try {
-      // 1. Autenticación con Supabase Auth
+      // 1. Limpieza absoluta previa para evitar conflictos de sesiones anteriores
+      if (typeof window !== 'undefined') {
+        localStorage.clear()
+        sessionStorage.clear()
+      }
+
+      // 2. Autenticación con Supabase Auth
       let authRes
       try {
         authRes = await fetch(SUPABASE_TOKEN_URL, {
@@ -70,7 +87,7 @@ export default function Login() {
         throw new Error('La respuesta de autenticación no incluyó un token.')
       }
 
-      // 2. Obtener el rol desde el backend (única fuente de verdad)
+      // 3. Obtener el rol desde el backend (única fuente de verdad)
       let meRes
       try {
         meRes = await fetch(`${API_BASE_URL}/api/me`, {
@@ -100,24 +117,18 @@ export default function Login() {
         )
       }
 
-      // 3. Todo salió bien: recién ahora se guarda la sesión
-      // "Mantener sesión" -> localStorage; si no, sessionStorage (se borra al cerrar la pestaña)
+      // 4. Guardar la sesión en el almacenamiento seleccionado
       const storage = rememberMe ? localStorage : sessionStorage
-      localStorage.removeItem('token')
-      localStorage.removeItem('refresh_token')
-      sessionStorage.removeItem('token')
-      sessionStorage.removeItem('refresh_token')
-
       storage.setItem('token', token)
       if (authData.refresh_token) {
         storage.setItem('refresh_token', authData.refresh_token)
       }
 
-      await router.push(destination)
+      // 5. Redirección dura para garantizar la limpieza total del estado en memoria
+      window.location.href = destination
     } catch (err) {
       console.error(err)
       setError(err.message || 'Ocurrió un error al iniciar sesión.')
-    } finally {
       setLoading(false)
     }
   }
@@ -127,7 +138,6 @@ export default function Login() {
     login(email, password)
   }
 
-  // Botones del prototipo: rellenan los campos y hacen el login real (sin saltarse la API)
   const handleSelectSeedUser = (selectedEmail) => {
     setEmail(selectedEmail)
     setPassword(SEED_PASSWORD)
@@ -135,34 +145,55 @@ export default function Login() {
   }
 
   return (
-    <div className="w-full h-screen flex items-center justify-center p-4 sm:p-6 bg-white font-sans overflow-hidden">
-      <div className="w-full h-full flex flex-col md:flex-row items-stretch gap-6 md:gap-12">
-        {/* Bloque Izquierdo */}
-        <div className="w-full md:w-1/2 h-full bg-black p-6 sm:p-12 flex flex-col justify-between relative overflow-hidden shadow-sm">
+    <div className="w-full h-screen flex bg-white font-sans overflow-hidden">
+      {/* Panel izquierdo */}
+      <div className="hidden md:flex md:w-1/2 h-full bg-[#0a0a0a] relative overflow-hidden flex-col px-8 lg:px-12 py-8">
+        <div className="flex items-center gap-3 relative z-10">
+          <div className="w-8 h-8 bg-[#ea580c] flex items-center justify-center rounded-none">
+            <HiOutlineChartBar className="w-4 h-4 text-[#0a0a0a]" />
+          </div>
           <div>
-            <h1 className="text-white text-2xl sm:text-3xl lg:text-4xl leading-[1.15] z-10 tracking-tight font-light">
-              Encuentra. Gobierna.
-              <br />
-              Crece.
-              <br />
-            </h1>
-            <span className="mt-10 text-xs sm:text-sm bg-black text-white">
-              Powered by{' '}
-              <span className="font-semibold text-[#ea580c]">Grupo 06</span>
-            </span>
+            <p className="text-sm font-semibold leading-none text-white">
+              Catálogo de Datos
+            </p>
+            <p className="text-[11px] text-gray-400 mt-1">
+              Banco Andino S.A.C.
+            </p>
           </div>
-          <div className="absolute inset-0 pointer-events-none flex items-end justify-start pl-8 gap-3 opacity-90">
-            <div className="w-16 h-3/5 bg-gradient-to-t from-[#ea580c] via-[#d97706] to-transparent rounded-t-none blur-[1px]" />
-            <div className="w-12 h-4/5 bg-gradient-to-t from-[#c2410c] via-[#ea580c] to-transparent rounded-t-none blur-[1px]" />
-            <div className="w-16 h-2/3 bg-gradient-to-t from-[#9a3412] via-[#c2410c] to-transparent rounded-t-none blur-[2px]" />
-          </div>
-
-          <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-[#ea580c]/60 to-transparent blur-2xl pointer-events-none" />
         </div>
 
-        {/* Bloque Derecho */}
-        <div className="w-full md:w-1/2 h-full flex flex-col justify-center px-2 sm:px-6 overflow-y-auto">
-          {/* Encabezados */}
+        <div className="mt-16 lg:mt-20 relative z-10 max-w-md">
+          <h1 className="text-4xl lg:text-5xl xl:text-6xl font-light leading-[1.08] tracking-tight text-white">
+            Encuentra.
+            <br />
+            Gobierna.
+            <br />
+            <span className="text-[#fb923c] font-normal">Crece.</span>
+          </h1>
+          <p className="mt-6 text-sm leading-relaxed text-gray-300">
+            Un catálogo de datasets con gobierno incorporado y un agente
+            conversacional que responde con metadatos y cita siempre sus
+            fuentes.
+          </p>
+        </div>
+
+        <div
+          className="absolute bottom-0 left-8 lg:left-12 h-full flex items-end gap-2 pointer-events-none"
+          aria-hidden="true"
+        >
+          {heroBars.map((bar, i) => (
+            <div
+              key={i}
+              className="w-9 lg:w-12 xl:w-14"
+              style={{ height: bar.height, backgroundColor: bar.color }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Panel derecho */}
+      <div className="w-full md:w-1/2 h-full flex flex-col justify-center px-6 sm:px-10 lg:px-16 overflow-y-auto">
+        <div className="w-full max-w-md mx-auto">
           <div className="mb-4">
             <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight mb-1">
               Inicia sesión
@@ -174,7 +205,6 @@ export default function Login() {
             <div className="w-full h-[1px] bg-gray-100 mt-3" />
           </div>
 
-          {/* Mensaje de Error */}
           {error && (
             <div
               role="alert"
@@ -184,11 +214,12 @@ export default function Login() {
             </div>
           )}
 
-          {/* Formulario */}
           <form onSubmit={handleSubmit} className="space-y-3 w-full">
-            {/* Campo Email */}
             <div>
-              <label className="block text-[11px] font-medium text-gray-500 mb-1">
+              <label
+                htmlFor="login-email"
+                className="block text-[11px] font-medium text-gray-500 mb-1"
+              >
                 Correo corporativo
               </label>
               <div className="relative">
@@ -208,6 +239,7 @@ export default function Login() {
                   </svg>
                 </span>
                 <input
+                  id="login-email"
                   type="email"
                   required
                   value={email}
@@ -218,9 +250,11 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Campo Password */}
             <div>
-              <label className="block text-[11px] font-medium text-gray-500 mb-1">
+              <label
+                htmlFor="login-password"
+                className="block text-[11px] font-medium text-gray-500 mb-1"
+              >
                 Contraseña
               </label>
               <div className="relative">
@@ -240,6 +274,7 @@ export default function Login() {
                   </svg>
                 </span>
                 <input
+                  id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
@@ -280,29 +315,20 @@ export default function Login() {
               </div>
             </div>
 
-            {/* Opciones Adicionales */}
-            <div className="flex items-center justify-between text-xs pt-1">
+            <div className="flex items-center text-xs pt-1">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 text-[#ea580c] border-gray-300 rounded focus:ring-[#ea580c] accent-[#ea580c]"
+                  className="w-4 h-4 text-[#ea580c] border-gray-300 rounded-none focus:ring-[#ea580c] accent-[#ea580c]"
                 />
                 <span className="text-gray-700 font-medium">
                   Mantener la sesión iniciada
                 </span>
               </label>
-              <a
-                href="#forgot"
-                onClick={(e) => e.preventDefault()}
-                className="text-[#ea580c] hover:underline font-semibold"
-              >
-                ¿Olvidaste tu contraseña?
-              </a>
             </div>
 
-            {/* Botón Principal */}
             <button
               type="submit"
               disabled={loading}
