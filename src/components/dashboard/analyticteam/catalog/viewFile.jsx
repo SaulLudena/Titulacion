@@ -6,14 +6,11 @@ import {
   HiKey,
   HiChevronRight,
   HiCheck,
-  HiExternalLink,
-  HiClipboardCopy,
   HiDownload,
 } from 'react-icons/hi'
+import { descargarDataset } from '../../../../libs/descargar'
 
 export default function ViewFile({ dataset, onBack, onRequestAccess }) {
-  const [copied, setCopied] = React.useState(false)
-
   // Si no llega el dataset, mostramos un estado vacío defensivo en lugar de datos quemados
   if (!dataset) {
     return (
@@ -47,12 +44,8 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
     return cleanText.charAt(0).toUpperCase() + cleanText.slice(1).toLowerCase()
   }
 
-  const handleCopyUrl = () => {
-    if (downloadUrl) {
-      navigator.clipboard.writeText(downloadUrl)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
+  const handleDownload = () => {
+    descargarDataset(dataset.id).catch((err) => alert(err.message))
   }
 
   return (
@@ -104,15 +97,14 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
             </div>
 
             {canDownload ? (
-              <a
-                href={downloadUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={handleDownload}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#ea580c] hover:bg-[#d94e09] text-white text-xs font-semibold rounded-none shadow-sm transition-colors cursor-pointer"
               >
                 <HiDownload className="w-4 h-4" />
                 <span>Descargar</span>
-              </a>
+              </button>
             ) : (
               <button
                 type="button"
@@ -135,40 +127,6 @@ export default function ViewFile({ dataset, onBack, onRequestAccess }) {
           </button>
         )}
       </div>
-
-      {/* URL del Dataset Crudo (visible si tiene acceso y URL disponible) */}
-      {hasAccess && downloadUrl && (
-        <div className="bg-emerald-50/60 border border-emerald-200 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
-          <div className="space-y-0.5 overflow-hidden">
-            <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">
-              URL del Dataset Crudo Aprobado:
-            </span>
-            <span className="text-xs font-mono text-emerald-950 break-all">
-              {downloadUrl}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={handleCopyUrl}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-none transition-colors cursor-pointer"
-            >
-              <HiClipboardCopy className="w-3.5 h-3.5" />
-              <span>{copied ? '¡Copiado!' : 'Copiar URL'}</span>
-            </button>
-            <a
-              href={downloadUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black hover:bg-gray-800 text-white text-xs font-medium rounded-none transition-colors cursor-pointer"
-            >
-              <span>Abrir</span>
-              <HiExternalLink className="w-3.5 h-3.5" />
-            </a>
-          </div>
-        </div>
-      )}
 
       {/* Contenido de 2 columnas: Detalles e Información Lateral */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { useRouter } from 'next/router'
 import {
   HiCheckCircle,
@@ -8,8 +8,8 @@ import {
   HiCheck,
   HiChevronRight,
   HiDownload,
-  HiClipboardCopy,
 } from 'react-icons/hi'
+import { descargarDataset } from '../../../../libs/descargar'
 
 export default function CatalogItem({
   id,
@@ -27,15 +27,12 @@ export default function CatalogItem({
   onViewDetails,
 }) {
   const router = useRouter()
-  const [copied, setCopied] = useState(false)
 
   // Acceso válido: vigente o solicitud aprobada
   const isApproved = solicitud?.estado === 'aprobada'
   const hasValidAccess =
     hasAccess || isApproved || descarga?.disponible === true
 
-  // URL exacta del objeto descarga (descarga.url). Esa dirección se abre en
-  // otra pestaña y allí la descarga empieza automáticamente.
   const downloadUrl = descarga?.url
   const showDownload =
     hasValidAccess && descarga?.disponible !== false && Boolean(downloadUrl)
@@ -50,14 +47,9 @@ export default function CatalogItem({
     }
   }
 
-  // Copiar URL al portapapeles
-  const handleCopyUrl = (e) => {
+  const handleDownload = (e) => {
     e.stopPropagation()
-    if (downloadUrl) {
-      navigator.clipboard.writeText(downloadUrl)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
+    descargarDataset(id).catch((err) => alert(err.message))
   }
 
   // Renderizado dinámico de las etiquetas de Estado
@@ -142,27 +134,12 @@ export default function CatalogItem({
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
-                onClick={handleCopyUrl}
-                title="Copiar URL"
-                className="p-1 text-emerald-700 hover:bg-emerald-100 transition-colors cursor-pointer"
-              >
-                <HiClipboardCopy className="w-4 h-4" />
-              </button>
-              {copied && (
-                <span className="text-[10px] text-emerald-700 font-medium animate-pulse">
-                  ¡Copiado!
-                </span>
-              )}
-              <a
-                href={downloadUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
+                onClick={handleDownload}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium rounded-none transition-colors cursor-pointer shadow-sm"
               >
                 <HiDownload className="w-4 h-4" />
                 <span>Descargar dataset</span>
-              </a>
+              </button>
             </div>
           </div>
         )}
