@@ -13,7 +13,6 @@ const ESTADOS = [
   { value: 'en_revision', label: 'En revisión' },
   { value: 'certificado', label: 'Certificados' },
 ]
-const CAPAS = ['todas', 'bronce', 'plata']
 
 export default function CertifyDataset() {
   const [datasets, setDatasets] = useState([])
@@ -21,7 +20,6 @@ export default function CertifyDataset() {
   const [error, setError] = useState(null)
 
   const [q, setQ] = useState('')
-  const [capa, setCapa] = useState('todas')
   const [estado, setEstado] = useState('todos') // Cambiado a 'todos' por defecto para evitar listas vacías
   const [ownerSeleccionado, setOwnerSeleccionado] = useState('todos')
   const [pagina, setPagina] = useState(1)
@@ -61,7 +59,6 @@ export default function CertifyDataset() {
       .filter((d) => {
         const nombreDataset = d.dataset || d.nombre || d.nombre_tecnico || ''
         if (texto && !nombreDataset.toLowerCase().includes(texto)) return false
-        if (capa !== 'todas' && d.capa !== capa) return false
 
         // Filtro por Data Owner
         if (ownerSeleccionado !== 'todos') {
@@ -89,7 +86,7 @@ export default function CertifyDataset() {
           (a.cantidad || 0) - (b.cantidad || 0) ||
           (a.dataset || '').localeCompare(b.dataset || ''),
       )
-  }, [datasets, q, capa, estado, ownerSeleccionado])
+  }, [datasets, q, estado, ownerSeleccionado])
 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA))
   const paginaActual = Math.min(pagina, totalPaginas)
@@ -115,17 +112,6 @@ export default function CertifyDataset() {
           placeholder="Buscar dataset..."
           className="border border-gray-200 bg-white px-3 py-2 text-xs w-60 focus:outline-none focus:border-[#ea580c]"
         />
-        <select
-          value={capa}
-          onChange={cambiar(setCapa)}
-          className="border border-gray-200 bg-white px-3 py-2 text-xs capitalize focus:outline-none focus:border-[#ea580c]"
-        >
-          {CAPAS.map((c) => (
-            <option key={c} value={c}>
-              {c === 'todas' ? 'Todas las capas' : NOMBRE_CAPA[c]}
-            </option>
-          ))}
-        </select>
         <select
           value={estado}
           onChange={cambiar(setEstado)}

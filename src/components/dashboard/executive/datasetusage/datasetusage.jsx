@@ -23,7 +23,6 @@ const CATEGORIAS = [
   { value: 'normal', label: 'Normales' },
   { value: 'infrautilizado', label: 'Infrautilizados' },
 ]
-const CAPAS = ['todas', 'bronce', 'plata']
 
 const fechaCorta = (f) => {
   if (!f) return 'Sin consultas'
@@ -70,7 +69,6 @@ export default function DatasetUsage() {
   const [datos, setDatos] = useState([])
   const [q, setQ] = useState('')
   const [categoria, setCategoria] = useState('todas')
-  const [capa, setCapa] = useState('todas')
   const [pagina, setPagina] = useState(1)
   const [cargando, setCargando] = useState(true)
   const [descargando, setDescargando] = useState(false)
@@ -148,7 +146,6 @@ export default function DatasetUsage() {
       .filter((d) => {
         if (t && !d.nombre_tecnico.toLowerCase().includes(t)) return false
         if (categoria !== 'todas' && d.categoria !== categoria) return false
-        if (capa !== 'todas' && d.capa !== capa) return false
         return true
       })
       .sort(
@@ -156,7 +153,7 @@ export default function DatasetUsage() {
           b.consultas_total - a.consultas_total ||
           a.nombre_tecnico.localeCompare(b.nombre_tecnico),
       )
-  }, [datos, q, categoria, capa])
+  }, [datos, q, categoria])
 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA))
   const paginaActual = Math.min(pagina, totalPaginas)
@@ -301,17 +298,6 @@ export default function DatasetUsage() {
           {CATEGORIAS.map((c) => (
             <option key={c.value} value={c.value}>
               {c.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={capa}
-          onChange={cambiar(setCapa)}
-          className={`${input} capitalize`}
-        >
-          {CAPAS.map((c) => (
-            <option key={c} value={c}>
-              {c === 'todas' ? 'Todas las capas' : NOMBRE_CAPA[c]}
             </option>
           ))}
         </select>
