@@ -7,8 +7,23 @@ import {
   HiOutlinePlus,
 } from 'react-icons/hi'
 import { RiRobot2Fill } from 'react-icons/ri'
+import { NOMBRE_CAPA } from '../../../../libs/capas'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
+
+const STEP_LABELS = {
+  analisis_consulta: 'Análisis de la consulta',
+  busqueda_hibrida: 'Búsqueda híbrida',
+  reordenamiento: 'Reordenamiento',
+  herramienta: 'Herramienta',
+  validacion_politica: 'Validación de política',
+  generacion: 'Generación de la respuesta',
+}
+
+const ACCESS_STYLES = {
+  sin_acceso: 'text-red-700 bg-red-50 border-red-200',
+  con_acceso: 'text-green-700 bg-green-50 border-green-200',
+}
 
 // ---------- Helpers ----------
 
@@ -71,6 +86,7 @@ const normalizeDataset = (ds, index) => {
       readText(ds.nombre_tecnico) ||
       readText(ds.nombre) ||
       'Dataset sin nombre',
+    businessName: readText(ds.nombre_negocio),
     code: readText(ds.nombre_tecnico),
     status: readText(ds.estado),
     classification: readText(ds.clasificacion),
@@ -81,9 +97,47 @@ const normalizeDataset = (ds, index) => {
     frescura: readText(ds.frescura),
     advertencias: Array.isArray(ds.advertencias) ? ds.advertencias : [],
     highlighted: Boolean(ds.highlighted),
-    isCertified: !ds.advertencias?.includes('dataset_no_certificado'),
+    isCertified: readText(ds.estado) === 'certificado',
   }
 }
+
+const routeSources = (ruta) =>
+  Array.isArray(ruta?.fuentes)
+    ? ruta.fuentes
+        .map((f, index) =>
+          normalizeDataset(
+            {
+              dataset_id: f.dataset_id,
+              nombre_tecnico: f.dataset,
+              mi_acceso: f.estado_acceso,
+            },
+            index,
+          ),
+        )
+        .filter(Boolean)
+    : []
+
+const summarize = (obj) =>
+  Object.entries(obj || {})
+    .filter(([, v]) => isPrimitive(v) || typeof v === 'boolean')
+    .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`)
+    .join(' · ')
+
+const withCitations = (text) =>
+  String(text)
+    .split(/\[(\d+)\]/)
+    .map((part, index) =>
+      index % 2 ? (
+        <sup
+          key={index}
+          className="ml-0.5 px-1 text-[9px] font-bold bg-orange-100 text-[#ea580c] border border-orange-200"
+        >
+          {part}
+        </sup>
+      ) : (
+        part
+      ),
+    )
 
 const extractDatasets = (data) => {
   if (!data || typeof data !== 'object') return []
@@ -139,7 +193,7 @@ const storedSources = (m) => {
   const src = m?.fuentes ?? m?.datasets ?? m?.ruta_fuentes ?? m?.metadata
   if (Array.isArray(src)) return src.map(normalizeDataset).filter(Boolean)
   if (src && typeof src === 'object') return extractDatasets(src)
-  return []
+  return routeSources(m?.ruta)
 }
 
 const isUserRole = (m) => {
@@ -167,6 +221,7 @@ const toFrontMessages = (m, index) => {
         sender: 'agent',
         text: extractText(m),
         datasets: storedSources(m),
+        route: m.ruta ?? null,
       },
     ]
   }
@@ -181,7 +236,15 @@ const toFrontMessages = (m, index) => {
 
   return isUserRole(m)
     ? [{ id: base, sender: 'user', text, initials: 'AT' }]
-    : [{ id: base, sender: 'agent', text, datasets: storedSources(m) }]
+    : [
+        {
+          id: base,
+          sender: 'agent',
+          text,
+          datasets: storedSources(m),
+          route: m?.ruta ?? null,
+        },
+      ]
 }
 
 // ---------- Componente ----------
@@ -305,6 +368,7 @@ export default function Chat() {
           sender: 'agent',
           text: extractText(data),
           datasets: extractDatasets(data),
+          route: data?.ruta ?? null,
         },
       ])
     } catch (err) {
@@ -384,7 +448,7 @@ export default function Chat() {
 
                   <div className="space-y-4 max-w-3xl flex-1">
                     <p className="text-xs text-gray-800 leading-relaxed whitespace-pre-line">
-                      {msg.text}
+                      {withCitations(msg.text)}
                     </p>
 
                     {/* Tarjetas de datasets */}
@@ -395,17 +459,37 @@ export default function Chat() {
                       >
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-xs font-bold text-gray-900 font-mono">
-                              {ds.title}
+                            <span className="text-xs font-bold text-gray-900">
+                              {ds.businessName || ds.title}
                             </span>
+                            {ds.businessName && (
+                              <span className="text-[11px] text-gray-500 font-mono">
+                                {ds.title}
+                              </span>
+                            )}
+                            {ds.isCertified && (
+                              <span className="text-[10px] font-semibold text-white bg-[#ea580c] px-2 py-0.5">
+                                Certificado
+                              </span>
+                            )}
+                            {ds.classification && (
+                              <span className="text-[10px] font-medium text-amber-800 bg-amber-50 px-2 py-0.5 border border-amber-200">
+                                {ds.classification}
+                              </span>
+                            )}
                             {ds.capa && (
-                              <span className="text-[10px] uppercase tracking-wider font-semibold bg-gray-100 text-gray-700 px-1.5 py-0.5 border border-gray-200">
-                                Capa: {ds.capa}
+                              <span className="text-[10px] tracking-wider font-semibold bg-gray-100 text-gray-700 px-1.5 py-0.5 border border-gray-200">
+                                Capa: {NOMBRE_CAPA[ds.capa] || ds.capa}
                               </span>
                             )}
                             {ds.myAccess && (
-                              <span className="text-[10px] font-medium text-red-700 bg-red-50 px-2 py-0.5 border border-red-200">
-                                {ds.myAccess}
+                              <span
+                                className={`text-[10px] font-medium px-2 py-0.5 border ${
+                                  ACCESS_STYLES[ds.myAccess] ||
+                                  'text-gray-700 bg-gray-50 border-gray-200'
+                                }`}
+                              >
+                                {ds.myAccess.replace(/_/g, ' ')}
                               </span>
                             )}
                           </div>
@@ -448,7 +532,8 @@ export default function Chat() {
                     ))}
 
                     {/* Ruta y fuentes (desplegable) */}
-                    {msg.datasets?.length > 0 && (
+                    {(msg.datasets?.length > 0 ||
+                      msg.route?.pasos?.length > 0) && (
                       <div className="space-y-2">
                         <button
                           onClick={() => toggleSources(msg.id)}
@@ -465,19 +550,54 @@ export default function Chat() {
                         </button>
 
                         {openSources[msg.id] && (
-                          <ul className="border border-gray-200 bg-gray-50 divide-y divide-gray-200 text-[11px] text-gray-600">
-                            {msg.datasets.map((ds) => (
-                              <li key={ds.key} className="px-3 py-2">
-                                <span className="font-semibold text-gray-800">
-                                  {ds.title}
-                                </span>
-                                <div className="text-gray-500 mt-0.5">
-                                  Dominio: {ds.domain || 'N/D'} | Responsable:{' '}
-                                  {ds.owner || 'N/D'}
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
+                          <div className="border border-gray-200 bg-gray-50 divide-y divide-gray-200 text-[11px] text-gray-600">
+                            {msg.route?.pasos?.length > 0 && (
+                              <ol className="px-3 py-2 space-y-1.5">
+                                {msg.route.pasos.map((step) => (
+                                  <li key={step.orden}>
+                                    <span className="font-semibold text-gray-800">
+                                      {step.orden}.{' '}
+                                      {STEP_LABELS[step.tipo] || step.tipo}
+                                    </span>
+                                    <span className="text-gray-500">
+                                      {' '}
+                                      · {step.nombre}
+                                      {step.duracion_ms != null &&
+                                        ` · ${step.duracion_ms} ms`}
+                                      {step.ok === false && ' · sin éxito'}
+                                    </span>
+                                    {summarize(step.resultado) && (
+                                      <div className="text-gray-500">
+                                        {summarize(step.resultado)}
+                                      </div>
+                                    )}
+                                  </li>
+                                ))}
+                                {msg.route.modelo && (
+                                  <li className="text-gray-500">
+                                    Modelo: {msg.route.modelo}
+                                    {msg.route.latencia_ms != null &&
+                                      ` · ${msg.route.latencia_ms} ms en total`}
+                                  </li>
+                                )}
+                              </ol>
+                            )}
+                            {msg.datasets?.length > 0 && (
+                              <ul className="divide-y divide-gray-200">
+                                {msg.datasets.map((ds, index) => (
+                                  <li key={ds.key} className="px-3 py-2">
+                                    <span className="font-semibold text-gray-800">
+                                      [{index + 1}] {ds.title}
+                                    </span>
+                                    <div className="text-gray-500 mt-0.5">
+                                      Dominio: {ds.domain || 'N/D'} |
+                                      Responsable: {ds.owner || 'N/D'}
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
                         )}
                       </div>
                     )}
