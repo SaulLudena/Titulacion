@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { HiChevronRight, HiChevronLeft } from 'react-icons/hi'
 import { apiFetch } from '../../../../libs/api'
+import { NOMBRE_CAPA } from '../../../../libs/capas'
 
 const POR_PAGINA = 15
 
@@ -12,7 +13,7 @@ const ESTADOS = [
   { value: 'en_revision', label: 'En revisión' },
   { value: 'certificado', label: 'Certificados' },
 ]
-const CAPAS = ['todas', 'bronce', 'plata', 'oro']
+const CAPAS = ['todas', 'bronce', 'plata']
 
 export default function CertifyDataset() {
   const [datasets, setDatasets] = useState([])
@@ -121,7 +122,7 @@ export default function CertifyDataset() {
         >
           {CAPAS.map((c) => (
             <option key={c} value={c}>
-              {c === 'todas' ? 'Todas las capas' : c}
+              {c === 'todas' ? 'Todas las capas' : NOMBRE_CAPA[c]}
             </option>
           ))}
         </select>
@@ -179,7 +180,7 @@ export default function CertifyDataset() {
                     {d.dataset || d.nombre}
                   </span>
                   <span className="border border-gray-300 text-gray-600 px-1.5 py-0.5 text-[10px] uppercase">
-                    {d.capa || 'General'}
+                    {NOMBRE_CAPA[d.capa] || d.capa || 'General'}
                   </span>
                 </div>
 

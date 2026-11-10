@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import Viewfile from '@/src/components/dashboard/analyticteam/catalog/viewFile'
 import AnalyticTeamLayout from '@/src/components/dashboard/analyticteam/analyticteamlayout'
 import Head from 'next/head'
+import { NOMBRE_CAPA } from '@/src/libs/capas'
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL
 
@@ -120,7 +121,7 @@ export default function Viewfilepage() {
 
           metadata: {
             source: safeSource,
-            originPath: `${result.capa || 'gold'} / ${result.esquema_origen || 'schema'} / ${result.nombre_tecnico || 'tabla'}`,
+            originPath: `${NOMBRE_CAPA[result.capa] || result.capa || 'ETLs'} / ${result.esquema_origen || 'schema'} / ${result.nombre_tecnico || 'tabla'}`,
             domain: safeDomain,
             owner: safeOwner,
             validity: result.frecuencia_sla

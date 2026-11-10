@@ -7,6 +7,7 @@ import {
   HiChevronRight,
 } from 'react-icons/hi'
 import { apiFetch } from '../../../../libs/api'
+import { NOMBRE_CAPA } from '../../../../libs/capas'
 
 const API = process.env.NEXT_PUBLIC_API_URL
 const POR_PAGINA = 15
@@ -22,7 +23,7 @@ const CATEGORIAS = [
   { value: 'normal', label: 'Normales' },
   { value: 'infrautilizado', label: 'Infrautilizados' },
 ]
-const CAPAS = ['todas', 'bronce', 'plata', 'oro']
+const CAPAS = ['todas', 'bronce', 'plata']
 
 const fechaCorta = (f) => {
   if (!f) return 'Sin consultas'
@@ -310,7 +311,7 @@ export default function DatasetUsage() {
         >
           {CAPAS.map((c) => (
             <option key={c} value={c}>
-              {c === 'todas' ? 'Todas las capas' : c}
+              {c === 'todas' ? 'Todas las capas' : NOMBRE_CAPA[c]}
             </option>
           ))}
         </select>
@@ -357,7 +358,7 @@ export default function DatasetUsage() {
                           {d.nombre_tecnico}
                         </span>
                         <span className="border border-gray-300 text-gray-500 px-1.5 py-0.5 text-[10px] uppercase">
-                          {d.capa}
+                          {NOMBRE_CAPA[d.capa] || d.capa}
                         </span>
                       </div>
                       <p className="text-[11px] text-gray-400 mt-0.5">
