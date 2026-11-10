@@ -16,14 +16,6 @@ const roleRoutes = {
   cumplimiento: '/dashboard/complianceoffice',
 }
 
-// Usuarios semilla del prototipo (solo rellenan y ejecutan el login real)
-const SEED_PASSWORD = 'bancoandino'
-const seedUsers = [
-  { label: 'Giacomo (Analista)', email: 'giacomo.delgado@bancoandino.pe' },
-  { label: 'Wilson (Ejecutivo)', email: 'wilson.cornejo@bancoandino.pe' },
-  { label: 'Jorge (Cumplimiento)', email: 'jorge.cerdan@bancoandino.pe' },
-]
-
 // Barras decorativas del panel izquierdo
 const heroBars = [
   { height: '15%', color: '#7c2d12' },
@@ -38,8 +30,8 @@ const heroBars = [
 export default function Login() {
   const router = useRouter()
 
-  const [email, setEmail] = useState('giacomo.delgado@bancoandino.pe')
-  const [password, setPassword] = useState(SEED_PASSWORD)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
 
@@ -154,12 +146,6 @@ export default function Login() {
   const handleSubmit = (e) => {
     e.preventDefault()
     login(email, password)
-  }
-
-  const handleSelectSeedUser = (selectedEmail) => {
-    setEmail(selectedEmail)
-    setPassword(SEED_PASSWORD)
-    login(selectedEmail, SEED_PASSWORD)
   }
 
   return (
@@ -370,27 +356,6 @@ export default function Login() {
               )}
             </button>
           </form>
-
-          {/* Caja del Prototipo con Semillas */}
-          <div className="mt-4 p-3 border border-dashed border-gray-300 rounded-none">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold tracking-wider text-gray-500 uppercase mb-2">
-              <span>▷</span> REVISAR PROTOTIPO CON USUARIOS SEMILLA
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {seedUsers.map((user) => (
-                <button
-                  key={user.email}
-                  type="button"
-                  disabled={loading}
-                  onClick={() => handleSelectSeedUser(user.email)}
-                  className="px-2.5 py-1.5 border border-gray-200 text-xs font-medium text-gray-800 hover:bg-gray-50 bg-white cursor-pointer disabled:opacity-50"
-                >
-                  {user.label}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
 
