@@ -1,6 +1,8 @@
 import { useRouter } from 'next/router'
 import { useState } from 'react'
 import { HiOutlineChartBar } from 'react-icons/hi'
+import { factoresTotp } from '../../libs/mfa'
+import Mfa from './mfa'
 
 const SUPABASE_TOKEN_URL = process.env.NEXT_PUBLIC_SUPABASE_TOKEN_URL
 const SUPABASE_PUBLISHABLE_KEY =
@@ -43,6 +45,16 @@ export default function Login() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [mfa, setMfa] = useState(null)
+
+  const entrar = (sesion, destination) => {
+    const storage = rememberMe ? localStorage : sessionStorage
+    storage.setItem('token', sesion.access_token)
+    if (sesion.refresh_token) {
+      storage.setItem('refresh_token', sesion.refresh_token)
+    }
+    window.location.href = destination
+  }
 
   // Lógica unificada de login
   const login = async (loginEmail, loginPassword) => {
@@ -117,15 +129,21 @@ export default function Login() {
         )
       }
 
-      // 4. Guardar la sesión en el almacenamiento seleccionado
-      const storage = rememberMe ? localStorage : sessionStorage
-      storage.setItem('token', token)
-      if (authData.refresh_token) {
-        storage.setItem('refresh_token', authData.refresh_token)
+      const factor = (await factoresTotp(token)).find(
+        (f) => f.status === 'verified',
+      )
+      if (factor || userData.exige_mfa) {
+        setMfa({
+          token,
+          destination,
+          factorId: factor?.id,
+          enrolar: !factor,
+        })
+        setLoading(false)
+        return
       }
 
-      // 5. Redirección dura para garantizar la limpieza total del estado en memoria
-      window.location.href = destination
+      entrar(authData, destination)
     } catch (err) {
       console.error(err)
       setError(err.message || 'Ocurrió un error al iniciar sesión.')
@@ -375,6 +393,18 @@ export default function Login() {
           </div>
         </div>
       </div>
+
+      {mfa && (
+        <div className="fixed inset-0 z-50 bg-white flex items-center justify-center px-6">
+          <Mfa
+            token={mfa.token}
+            factorId={mfa.factorId}
+            enrolar={mfa.enrolar}
+            onVerificado={(sesion) => entrar(sesion, mfa.destination)}
+            onCancelar={() => setMfa(null)}
+          />
+        </div>
+      )}
     </div>
   )
 }
